@@ -123,7 +123,8 @@ function renderAnalytics() {
   const maxN = Math.max(1, ...days.map((d) => byDay[d].n));
   const bars = (val, max, alt) => days.map((d) => {
     const h = Math.round((val(d) / max) * 150);
-    return `<div class="bar-wrap"><span class="bar-val">${val(d) >= 1000 ? (val(d) / 1000).toFixed(1) + "k" : val(d)}</span><div class="bar ${alt ? "alt" : ""}" style="height:${h}px"></div><span class="bar-lbl">${d.slice(5)}</span></div>`;
+    const formattedVal = alt ? val(d) : (val(d) >= 1000000 ? (val(d) / 1000000).toFixed(2) + "M" : (val(d) >= 1000 ? (val(d) / 1000).toFixed(1) + "k" : val(d)));
+    return `<div class="bar-wrap"><span class="bar-val">${formattedVal}</span><div class="bar ${alt ? "alt" : ""}" style="height:${h}px"></div><span class="bar-lbl">${d.slice(5)}</span></div>`;
   }).join("") || `<div style="color:var(--faint)">No data yet.</div>`;
 
   $("#view-analytics").innerHTML = `<div class="page">
@@ -131,7 +132,7 @@ function renderAnalytics() {
     <div class="kpis">
       <div class="kpi"><div class="v">${tickets.length}</div><div class="l">Total tickets</div></div>
       <div class="kpi"><div class="v">${prs}</div><div class="l">PRs raised</div></div>
-      <div class="kpi"><div class="v">${(tokens / 1000).toFixed(1)}k</div><div class="l">Tokens burned</div></div>
+      <div class="kpi"><div class="v">${(tokens / 1000000).toFixed(2)}M</div><div class="l">Tokens burned</div></div>
       <div class="kpi"><div class="v">$${cost.toFixed(2)}</div><div class="l">Est. spend</div></div>
     </div>
     <div class="charts">
