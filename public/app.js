@@ -8,12 +8,18 @@ const COLS = [{ id: "todo", label: "To Do" }, { id: "doing", label: "In Progress
 const AV = ["#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899"];
 const initials = (n) => (n || "?").split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
-let tickets = [], runs = [], view = "board", openId = null, es = null, createAtts = [];
+let tickets = [], runs = [], wiki = null, view = "board", openId = null, es = null, streamingId = null, createAtts = [];
 const logs = new Map();
 const T = (id) => tickets.find((t) => t.id === id);
 
 async function loadAll() {
-  [tickets, runs] = await Promise.all([api("/api/tickets"), api("/api/runs")]);
+  [tickets, runs, wiki] = await Promise.all([api("/api/tickets"), api("/api/runs"), api("/api/wiki")]);
+  // if we're not the ones live-streaming this ticket (e.g. after a mid-run reload),
+  // trust the server's incrementally-persisted activity so the log keeps advancing.
+  if (openId && streamingId !== openId) {
+    const t = T(openId);
+    if (t?.activity?.length) logs.set(openId, t.activity.map((a) => ({ ...a })));
+  }
   render();
 }
 
@@ -23,10 +29,11 @@ function render() {
     b.classList.toggle("active", active);
     b.setAttribute("aria-selected", active ? "true" : "false");
   });
-  ["board", "runs", "analytics"].forEach((v) => ($(`#view-${v}`).hidden = v !== view));
+  ["board", "runs", "analytics", "graph"].forEach((v) => ($(`#view-${v}`).hidden = v !== view));
   if (view === "board") renderBoard();
   if (view === "runs") renderRuns();
   if (view === "analytics") renderAnalytics();
+  if (view === "graph") renderGraph();
   if (openId) renderIssue();
 }
 
@@ -130,6 +137,72 @@ function renderAnalytics() {
   </div>`;
 }
 
+// ---------------- codebase graph / wiki ----------------
+async function reindex() {
+  const btn = $("#reindex-btn"); if (btn) { btn.textContent = "⏳ indexing… (Gemini 3.5 Flash)"; btn.disabled = true; }
+  try { await api("/api/reindex", { method: "POST" }); await loadAll(); }
+  catch (e) { if (btn) { btn.textContent = "↻ Reindex (failed, retry)"; btn.disabled = false; } }
+}
+const GTYPES = { module: "#8b5cf6", endpoint: "#10b981", external: "#f59e0b", concept: "#3b82f6" };
+let graphSig = null, graphAnim = null;
+function renderGraph() {
+  const nodes0 = wiki?.nodes || [], edges0 = wiki?.edges || [];
+  const sig = (wiki?.generatedAt || "") + "/" + nodes0.length;
+  // don't rebuild (and reset physics) on background polls — only when the index changes
+  if (sig === graphSig && $("#gsvg")) return;
+  graphSig = sig;
+  if (graphAnim) { cancelAnimationFrame(graphAnim); graphAnim = null; }
+
+  $("#view-graph").innerHTML = `<div class="graph-page">
+    <div class="graph-head"><h1>Codebase Wiki</h1>
+      <div class="glegend">${Object.entries(GTYPES).map(([k, c]) => `<span><i style="background:${c}"></i>${k}</span>`).join("")}</div>
+      <button id="reindex-btn" class="primary">↻ Reindex</button></div>
+    <div class="muted-line">${wiki?.generatedAt ? `${nodes0.length} nodes · ${edges0.length} edges · ${esc(wiki.model || "Gemini 3.5 Flash")} · indexed ${new Date(wiki.generatedAt).toLocaleString()} · fed to Antigravity as a REPO MAP to cut exploration tokens` : "Not indexed yet — click Reindex to build the graph with Gemini 3.5 Flash."}</div>
+    <div class="gcanvas" id="gcanvas"><svg id="gsvg"><g id="gzoom"><g id="gedges"></g><g id="gnodes"></g></g></svg><div class="ghint">drag nodes · scroll to zoom · drag background to pan</div></div>
+  </div>`;
+  if ($("#reindex-btn")) $("#reindex-btn").onclick = reindex;
+  if (!nodes0.length) return;
+
+  const canvas = $("#gcanvas"), svg = $("#gsvg"), zoomG = $("#gzoom");
+  const W = canvas.clientWidth || 900, H = canvas.clientHeight || 520;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const idx = {};
+  const N = nodes0.map((n, i) => { idx[n.id] = i; return { ...n, x: W / 2 + (Math.random() - .5) * W * .6, y: H / 2 + (Math.random() - .5) * H * .6, vx: 0, vy: 0 }; });
+  const E = edges0.map((e) => ({ s: idx[e.source], t: idx[e.target] })).filter((e) => e.s != null && e.t != null);
+  const k = Math.sqrt((W * H) / Math.max(1, N.length)) * 0.72;
+  let temp = W / 8;
+
+  const gE = $("#gedges"), gN = $("#gnodes");
+  gE.innerHTML = E.map(() => `<line stroke="var(--line2,#444)" stroke-width="1" opacity="0.6"/>`).join("");
+  gN.innerHTML = N.map((n, i) => { const c = GTYPES[n.type] || "#888", r = n.type === "module" ? 14 : n.type === "concept" ? 11 : 9; return `<g class="gn" data-i="${i}"><circle r="${r}" fill="${c}33" stroke="${c}" stroke-width="1.8"/><text dy="-${r + 4}" text-anchor="middle" fill="var(--text)" font-size="9.5">${esc(n.label)}</text></g>`; }).join("");
+  const lineEls = [...gE.children], nodeEls = [...gN.children];
+
+  function draw() {
+    for (let i = 0; i < E.length; i++) { const l = lineEls[i], a = N[E[i].s], b = N[E[i].t]; l.setAttribute("x1", a.x.toFixed(1)); l.setAttribute("y1", a.y.toFixed(1)); l.setAttribute("x2", b.x.toFixed(1)); l.setAttribute("y2", b.y.toFixed(1)); }
+    for (let i = 0; i < N.length; i++) nodeEls[i].setAttribute("transform", `translate(${N[i].x.toFixed(1)},${N[i].y.toFixed(1)})`);
+  }
+  function step() {
+    for (let i = 0; i < N.length; i++) { let fx = 0, fy = 0; for (let j = 0; j < N.length; j++) { if (i === j) continue; let dx = N[i].x - N[j].x, dy = N[i].y - N[j].y, d = Math.hypot(dx, dy) || .01, rep = k * k / d; fx += dx / d * rep; fy += dy / d * rep; } N[i].vx = fx; N[i].vy = fy; }
+    for (const e of E) { const a = N[e.s], b = N[e.t]; let dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy) || .01, att = d * d / k, fx = dx / d * att, fy = dy / d * att; a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy; }
+    for (const n of N) { if (n.fixed) continue; n.vx += (W / 2 - n.x) * .012; n.vy += (H / 2 - n.y) * .012; const disp = Math.hypot(n.vx, n.vy) || .01; n.x += n.vx / disp * Math.min(disp, temp); n.y += n.vy / disp * Math.min(disp, temp); n.x = Math.max(24, Math.min(W - 24, n.x)); n.y = Math.max(24, Math.min(H - 24, n.y)); }
+    if (temp > 1.2) temp *= 0.975;
+    draw();
+    graphAnim = requestAnimationFrame(step);
+  }
+
+  let scale = 1, panx = 0, pany = 0, panning = false, sx = 0, sy = 0, drag = null;
+  const applyT = () => zoomG.setAttribute("transform", `translate(${panx},${pany}) scale(${scale})`);
+  const toLocal = (e) => { const r = svg.getBoundingClientRect(); return { x: ((e.clientX - r.left) / r.width * W - panx) / scale, y: ((e.clientY - r.top) / r.height * H - pany) / scale }; };
+  svg.onwheel = (e) => { e.preventDefault(); scale = Math.max(0.3, Math.min(3, scale * (e.deltaY < 0 ? 1.1 : 0.9))); applyT(); };
+  svg.onmousedown = (e) => { if (e.target.closest(".gn")) return; panning = true; sx = e.clientX - panx; sy = e.clientY - pany; };
+  gN.onmousedown = (e) => { const g = e.target.closest(".gn"); if (!g) return; e.stopPropagation(); drag = +g.dataset.i; N[drag].fixed = true; temp = Math.max(temp, W / 14); };
+  const onMove = (e) => { if (panning) { panx = e.clientX - sx; pany = e.clientY - sy; applyT(); } if (drag != null) { const p = toLocal(e); N[drag].x = p.x; N[drag].y = p.y; } };
+  const onUp = () => { panning = false; if (drag != null) { N[drag].fixed = false; drag = null; } };
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+  step();
+}
+
 // ---------------- issue modal ----------------
 function openIssue(id) {
   openId = id;
@@ -150,6 +223,10 @@ function closeIssue() {
 
 function renderIssue() {
   const t = T(openId); if (!t) return;
+  // preserve in-progress input + scroll across background re-renders (poll/SSE resync)
+  const rin = $("#reply input");
+  const keep = rin ? { val: rin.value, foc: document.activeElement === rin, s: rin.selectionStart, e: rin.selectionEnd } : null;
+  const mainScroll = $(".iss-main")?.scrollTop;
   const agents = (t.crew || []).length ? (t.crew || []).map((s, i) => `<div class="agent-row"><span class="avatar" style="background:${AV[i % AV.length]}">${initials(s.name)}</span><div><div class="nm">${esc(s.name)}</div><div class="rl">${esc(s.role || "")}</div></div><span class="tag">${i === 0 ? "lead" : "member"}</span></div>`).join("") : `<div style="color:var(--faint);font-size:13.5px;font-style:italic">No crew yet — start work to spawn the crew.</div>`;
   const atts = (t.attachments || []).map((a, i) => `<img src="${a.dataUrl}" title="${esc(a.name)}" alt="${esc(a.name)}" onclick="window.open('${a.dataUrl}')" />`).join("");
   const comments = (t.comments || []).filter((c) => !c.text || !c.text.includes("Test environment")).map((c) => `<div class="comment ${c.author} ${c.kind === "question" ? "question" : ""}"><div class="c-who">${c.author === "agent" ? "🤖 Antigravity" : c.author === "user" ? "🧑 Pathik" : "•"}${c.kind === "question" ? " · asks" : ""}</div><div>${linkify(esc(c.text))}</div></div>`).join("") || `<div style="color:var(--faint);font-size:13.5px;font-style:italic">No comments yet.</div>`;
@@ -194,6 +271,9 @@ function renderIssue() {
   if ($("#preview-btn")) $("#preview-btn").onclick = () => spinPreview(t.id);
   if ($("#close-pr")) $("#close-pr").onclick = () => closePR(t.id);
   if ($("#reply")) $("#reply").onsubmit = (e) => { e.preventDefault(); const i = $("#reply input"); if (i.value.trim()) { reply(t.id, i.value.trim()); i.value = ""; } };
+  // restore what the poll would otherwise have wiped
+  if (keep) { const ni = $("#reply input"); if (ni) { ni.value = keep.val; if (keep.foc) { ni.focus(); try { ni.setSelectionRange(keep.s, keep.e); } catch {} } } }
+  if (mainScroll != null) { const m = $(".iss-main"); if (m) m.scrollTop = mainScroll; }
   renderLog(openId);
 }
 
@@ -233,15 +313,16 @@ async function spinPreview(id) {
 function stream(url, id) {
   if (es) es.close();
   es = new EventSource(url);
+  streamingId = id;
   es.onmessage = async (ev) => {
     const e = JSON.parse(ev.data);
-    if (e.kind === "end") { es.close(); return; }
+    if (e.kind === "end") { es.close(); streamingId = null; return; }
     if (e.kind === "ticket") { await loadAll(); return; }
-    if (e.kind === "error") { es.close(); pushLog(id, "error", e.text); return; }
+    if (e.kind === "error") { es.close(); streamingId = null; pushLog(id, "error", e.text); return; }
     if (e.kind === "done") return;
     if (e.text) pushLog(id, e.kind, e.text);
   };
-  es.onerror = () => { es.close(); loadAll(); }; // dropped stream → resync from server truth
+  es.onerror = () => { es.close(); streamingId = null; loadAll(); }; // dropped stream → resync from server truth
 }
 
 // ---------------- create + attachments ----------------

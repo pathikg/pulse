@@ -6,6 +6,7 @@ import { runPlanner } from "./src/planner.js";
 import { runSpecialist, followUp } from "./src/antigravity.js";
 import * as db from "./src/store.js";
 import { startPreview, stopPreview } from "./src/preview.js";
+import { buildWiki, readWiki, wikiToPrompt } from "./src/wiki.js";
 
 try { process.loadEnvFile(); } catch { console.warn("no .env"); }
 if (!process.env.GOOGLE_API_KEY) { console.error("✗ GOOGLE_API_KEY missing"); process.exit(1); }
@@ -27,7 +28,12 @@ function sseStart(res) {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // don't let a proxy buffer/close the stream
   res.flushHeaders?.();
+  // keepalive: long agent turns have big gaps between events; a comment ping keeps the
+  // connection warm so it isn't reaped (which froze the live log mid-run).
+  const hb = setInterval(() => { try { res.write(`: ping\n\n`); } catch {} }, 15000);
+  res.on("close", () => clearInterval(hb));
   return (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
 }
 
@@ -68,7 +74,11 @@ function finishRun(ticket, buffer, done) {
     db.addComment(ticket.id, { author: "agent", kind: "question", text: qMatch[1].trim() });
     db.updateTicket(ticket.id, { status: "waiting" });
   } else {
-    db.addComment(ticket.id, { author: "system", kind: "note", text: "Run finished without a PR. Re-run or steer via a comment." });
+    // Finished, but no NEW pr/question detected — usually a steer that updated the existing PR.
+    // Never leave the card stuck showing "running…": fall back to review (if a PR exists) or todo.
+    db.updateTicket(ticket.id, { status: ticket.prNumber ? "review" : "todo" });
+    db.addComment(ticket.id, { author: "system", kind: "note",
+      text: ticket.prNumber ? `↪ Steer applied — existing PR #${ticket.prNumber} updated.` : "Run finished without a PR. Re-run or steer via a comment." });
   }
 }
 
@@ -86,6 +96,13 @@ app.post("/api/tickets/:id/attach", (req, res) => {
 });
 app.delete("/api/tickets/:id", (req, res) => { db.removeTicket(req.params.id); res.json({ ok: true }); });
 app.get("/api/runs", (_q, res) => res.json(db.listRuns()));
+
+// --- codebase wiki (Gemini 3.5 Flash index; fed to the agent to cut exploration tokens) ---
+app.get("/api/wiki", (_q, res) => res.json(readWiki() || { modules: [] }));
+app.post("/api/reindex", async (_q, res) => {
+  try { res.json(await buildWiki(ai)); }
+  catch (e) { res.status(500).json({ error: String(e?.message || e) }); }
+});
 
 // manual status change (drag-drop between columns, or mark done/obsolete)
 app.post("/api/tickets/:id/status", (req, res) => {
@@ -135,16 +152,17 @@ app.get("/api/run", async (req, res) => {
   const t = db.getTicket(req.query.id);
   if (!t) { send({ kind: "error", text: "no ticket" }); return res.end(); }
   db.updateTicket(t.id, { status: "doing" });
-  let buf = "", act = [];
+  const base = (t.activity || []).slice();
+  let buf = "", act = [], n = 0;
   try {
     const done = await runSpecialist(ai, {
-      ticket: t, crew: t.crew || [],
-      onEvent: (e) => { if (e.text && (e.kind === "message" || e.kind === "output")) buf += e.text + "\n"; pushAct(act, e); send(e); },
+      ticket: t, crew: t.crew || [], repoMap: wikiToPrompt(readWiki()),
+      onEvent: (e) => { if (e.text && (e.kind === "message" || e.kind === "output")) buf += e.text; /* no separator: deltas may split a URL mid-token */ pushAct(act, e); if (++n % 3 === 0) db.setActivity(t.id, [...base, ...act]); send(e); },
     });
-    db.appendActivity(t.id, act);
+    db.setActivity(t.id, [...base, ...act]);
     finishRun(t, buf, done);
     send({ kind: "ticket" }); send({ kind: "end" });
-  } catch (e) { db.appendActivity(t.id, [...act, { kind: "error", text: String(e?.message || e) }]); send({ kind: "error", text: String(e?.message || e) }); }
+  } catch (e) { db.setActivity(t.id, [...base, ...act, { kind: "error", text: String(e?.message || e) }]); send({ kind: "error", text: String(e?.message || e) }); }
   res.end();
 });
 
@@ -158,16 +176,17 @@ app.get("/api/reply", async (req, res) => {
   db.addComment(t.id, { author: "user", kind: "answer", text });
   db.appendActivity(t.id, [{ kind: "status", text: "↪ steer: " + text }]);
   db.updateTicket(t.id, { status: "doing" });
-  let buf = "", act = [];
+  const base = (db.getTicket(t.id).activity || []).slice();
+  let buf = "", act = [], n = 0;
   try {
     const done = await followUp(ai, {
       ticket: t, previousInteractionId: t.interactionId, environmentId: t.environmentId, input: text,
-      onEvent: (e) => { if (e.text && (e.kind === "message" || e.kind === "output")) buf += e.text + "\n"; pushAct(act, e); send(e); },
+      onEvent: (e) => { if (e.text && (e.kind === "message" || e.kind === "output")) buf += e.text; /* no separator: deltas may split a URL mid-token */ pushAct(act, e); if (++n % 3 === 0) db.setActivity(t.id, [...base, ...act]); send(e); },
     });
-    db.appendActivity(t.id, act);
+    db.setActivity(t.id, [...base, ...act]);
     finishRun(t, buf, done);
     send({ kind: "ticket" }); send({ kind: "end" });
-  } catch (e) { db.appendActivity(t.id, [...act, { kind: "error", text: String(e?.message || e) }]); send({ kind: "error", text: String(e?.message || e) }); }
+  } catch (e) { db.setActivity(t.id, [...base, ...act, { kind: "error", text: String(e?.message || e) }]); send({ kind: "error", text: String(e?.message || e) }); }
   res.end();
 });
 
