@@ -368,8 +368,10 @@ $("#scrim").onclick = closeIssue;
 
 // boot
 await loadAll();
-// backstop: if a run is in-flight, poll so the card converges even if the SSE stream dropped
-setInterval(() => { if (tickets.some((t) => t.status === "doing")) loadAll(); }, 8000);
+// backstop ONLY: converge the card if the SSE stream dropped. While a stream is live
+// (streamingId set), the SSE already updates the log — polling here would rebuild the whole
+// modal every 8s and cause the "component reload" flicker, so skip it entirely.
+setInterval(() => { if (!streamingId && tickets.some((t) => t.status === "doing")) loadAll(); }, 8000);
 const qp = new URLSearchParams(location.search).get("ticket");
 if (qp && T(qp)) openIssue(qp);
 
