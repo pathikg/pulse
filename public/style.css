@@ -29,6 +29,109 @@
   --transition-normal: 0.25s ease;
   --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
   --shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+
+  /* Semantic Theme Variables to replace hardcoded values */
+  --nav-active-text: #ffffff;
+  
+  --flag-bug-bg: rgba(239, 68, 68, 0.15);
+  --flag-bug-text: #fca5a5;
+  --flag-bug-border: rgba(239, 68, 68, 0.25);
+  
+  --flag-feature-bg: rgba(16, 185, 129, 0.15);
+  --flag-feature-text: #a7f3d0;
+  --flag-feature-border: rgba(16, 185, 129, 0.25);
+
+  --badge-pr-bg: rgba(16, 185, 129, 0.15);
+  --badge-pr-text: #34d399;
+  --badge-pr-border: rgba(16, 185, 129, 0.25);
+
+  --badge-running-bg: rgba(139, 92, 246, 0.2);
+  --badge-running-text: #c084fc;
+  --badge-running-border: rgba(139, 92, 246, 0.3);
+
+  --badge-waiting-bg: rgba(245, 158, 11, 0.15);
+  --badge-waiting-text: var(--amber);
+  --badge-waiting-border: rgba(245, 158, 11, 0.25);
+
+  --bar-bg: linear-gradient(180deg, var(--accent) 0%, #5b21b6 100%);
+  --bar-alt-bg: linear-gradient(180deg, var(--accent2) 0%, #065f46 100%);
+
+  --input-bg: #05070b;
+  --input-border: var(--line);
+  --input-text: var(--text);
+
+  --log-bg: #05070b;
+  --log-text: #c0caf5;
+  --log-thought: #8b5cf6;
+
+  --comment-agent-who: #c084fc;
+  --pr-action-text: #a7f3d0;
+  --startwork-text: #022c22;
+}
+
+[data-theme="light"] {
+  /* Slate & Purple Light Theme Design System Tokens */
+  --bg: #f8fafc;
+  --panel: #ffffff;
+  --panel2: #f1f5f9;
+  --panel3: #e2e8f0;
+  --line: #cbd5e1;
+  --line2: #94a3b8;
+  --line-active: #7c5cff;
+  --text: #0f172a;
+  --muted: #475569;
+  --faint: #57687d;
+  
+  /* Accents and States with optimized WCAG contrast */
+  --accent: #6d28d9;
+  --accent-hover: #5b21b6;
+  --accent2: #065f46;
+  --accent2-hover: #047857;
+  --cmd: #b45309;
+  --err: #dc2626;
+  --amber: #d97706;
+  --blue: #1d4ed8;
+  
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  /* Semantic Theme Variables to replace hardcoded values */
+  --nav-active-text: #0f172a;
+  
+  --flag-bug-bg: #fee2e2;
+  --flag-bug-text: #991b1b;
+  --flag-bug-border: #fca5a5;
+  
+  --flag-feature-bg: #d1fae5;
+  --flag-feature-text: #065f46;
+  --flag-feature-border: #a7f3d0;
+
+  --badge-pr-bg: #d1fae5;
+  --badge-pr-text: #065f46;
+  --badge-pr-border: #a7f3d0;
+
+  --badge-running-bg: #f5f3ff;
+  --badge-running-text: #6d28d9;
+  --badge-running-border: #ddd6fe;
+
+  --badge-waiting-bg: #fef3c7;
+  --badge-waiting-text: #b45309;
+  --badge-waiting-border: #fde68a;
+
+  --bar-bg: linear-gradient(180deg, var(--accent) 0%, #8b5cf6 100%);
+  --bar-alt-bg: linear-gradient(180deg, var(--accent2) 0%, #10b981 100%);
+
+  --input-bg: #ffffff;
+  --input-border: var(--line);
+  --input-text: var(--text);
+
+  --log-bg: #f8fafc;
+  --log-text: #334155;
+  --log-thought: #7c3aed;
+
+  --comment-agent-who: #6d28d9;
+  --pr-action-text: #065f46;
+  --startwork-text: #ffffff;
 }
 
 /* Global resets & high contrast settings */
@@ -148,7 +251,7 @@ a:hover {
   background-color: var(--panel2);
 }
 .nav button.active {
-  color: #ffffff;
+  color: var(--nav-active-text);
   background-color: var(--panel);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   border: 1px solid var(--line);
@@ -268,14 +371,14 @@ a:hover {
   letter-spacing: .04em;
 }
 .flag.bug {
-  background-color: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  background-color: var(--flag-bug-bg);
+  color: var(--flag-bug-text);
+  border: 1px solid var(--flag-bug-border);
 }
 .flag.feature {
-  background-color: rgba(16, 185, 129, 0.15);
-  color: #a7f3d0;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background-color: var(--flag-feature-bg);
+  color: var(--flag-feature-text);
+  border: 1px solid var(--flag-feature-border);
 }
 .key {
   font-size: 11.5px;
@@ -335,20 +438,20 @@ a:hover {
   letter-spacing: .02em;
 }
 .badge.pr {
-  background-color: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background-color: var(--badge-pr-bg);
+  color: var(--badge-pr-text);
+  border: 1px solid var(--badge-pr-border);
 }
 .badge.running {
-  background-color: rgba(139, 92, 246, 0.2);
-  color: #c084fc;
-  border: 1px solid rgba(139, 92, 246, 0.3);
+  background-color: var(--badge-running-bg);
+  color: var(--badge-running-text);
+  border: 1px solid var(--badge-running-border);
   animation: pulse 1.6s infinite ease-in-out;
 }
 .badge.waiting {
-  background-color: rgba(245, 158, 11, 0.15);
-  color: var(--amber);
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background-color: var(--badge-waiting-bg);
+  color: var(--badge-waiting-text);
+  border: 1px solid var(--badge-waiting-border);
 }
 .badge.obsolete {
   background-color: var(--panel3);
@@ -501,13 +604,13 @@ table.runs tr:hover td {
 .bar {
   width: 100%;
   max-width: 32px;
-  background: linear-gradient(180deg, var(--accent) 0%, #5b21b6 100%);
+  background: var(--bar-bg);
   border-radius: 4px 4px 0 0;
   min-height: 4px;
   transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .bar.alt {
-  background: linear-gradient(180deg, var(--accent2) 0%, #065f46 100%);
+  background: var(--bar-alt-bg);
 }
 .bar-lbl {
   font-size: 10.5px;
@@ -688,7 +791,7 @@ table.runs tr:hover td {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
   line-height: 1.6;
-  background-color: #05070b;
+  background-color: var(--log-bg);
   border: 1px solid var(--line2);
   border-radius: var(--radius-md);
   padding: 14px;
@@ -703,7 +806,7 @@ table.runs tr:hover td {
   display: none;
 }
 .log .thought {
-  color: #8b5cf6;
+  color: var(--log-thought);
   font-style: italic;
   padding-left: 12px;
   border-left: 2px solid rgba(139, 92, 246, 0.4);
@@ -720,7 +823,7 @@ table.runs tr:hover td {
   font-weight: 800;
 }
 .log .output {
-  color: #c0caf5;
+  color: var(--log-text);
   white-space: pre-wrap;
   word-break: break-all;
   background-color: rgba(255, 255, 255, 0.01);
@@ -773,7 +876,7 @@ table.runs tr:hover td {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.comment.agent .c-who { color: #c084fc; }
+.comment.agent .c-who { color: var(--comment-agent-who); }
 .comment.user .c-who { color: var(--accent2); }
 .comment.system {
   background-color: var(--panel3);
@@ -793,7 +896,7 @@ table.runs tr:hover td {
 }
 .reply input {
   flex: 1;
-  background-color: #05070b;
+  background-color: var(--input-bg);
   border: 1px solid var(--line);
   color: var(--text);
   padding: 11px 16px;
@@ -868,9 +971,9 @@ table.runs tr:hover td {
   border-color: var(--muted);
 }
 .pr-actions a.pr {
-  background-color: rgba(16, 185, 129, 0.15);
-  border-color: var(--accent2);
-  color: #a7f3d0;
+  background-color: var(--badge-pr-bg);
+  border-color: var(--badge-pr-border);
+  color: var(--pr-action-text);
 }
 .pr-actions a.pr:hover {
   background-color: rgba(16, 185, 129, 0.25);
@@ -878,7 +981,7 @@ table.runs tr:hover td {
 .startwork {
   width: 100%;
   background-color: var(--accent2);
-  color: #022c22;
+  color: var(--startwork-text);
   border: 0;
   padding: 12px;
   border-radius: var(--radius-md);
@@ -946,7 +1049,7 @@ table.runs tr:hover td {
   gap: 8px;
 }
 .modal input, .modal select, .modal textarea {
-  background-color: #05070b;
+  background-color: var(--input-bg);
   border: 1px solid var(--line);
   color: var(--text);
   padding: 11px 14px;
@@ -1005,4 +1108,29 @@ table.runs tr:hover td {
 .actions button:not(.primary):hover {
   background-color: var(--panel2);
   color: var(--text);
+}
+
+.theme-btn {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  padding: 8px 16px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+.theme-btn:hover {
+  color: var(--text);
+  background-color: var(--panel2);
+  border-color: var(--line2);
+}
+.theme-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
