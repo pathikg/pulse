@@ -30,3 +30,4 @@ npm start   # http://localhost:3000
 ```
 
 _Working name — subject to change._
+Probe: the Muster sandbox reached GitHub.
