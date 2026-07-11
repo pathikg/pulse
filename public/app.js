@@ -390,7 +390,7 @@ function applyTheme(theme) {
 }
 
 // Initial sync of toggle icon
-const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
 applyTheme(currentTheme);
 
 if (themeBtn) {
