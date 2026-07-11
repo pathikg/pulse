@@ -157,7 +157,7 @@ app.get("/api/run", async (req, res) => {
   try {
     const done = await runSpecialist(ai, {
       ticket: t, crew: t.crew || [], repoMap: wikiToPrompt(readWiki()),
-      onEvent: (e) => { if (e.text && (e.kind === "message" || e.kind === "output")) buf += e.text + "\n"; pushAct(act, e); if (++n % 3 === 0) db.setActivity(t.id, [...base, ...act]); send(e); },
+      onEvent: (e) => { if (e.text && (e.kind === "message" || e.kind === "output")) buf += e.text; /* no separator: deltas may split a URL mid-token */ pushAct(act, e); if (++n % 3 === 0) db.setActivity(t.id, [...base, ...act]); send(e); },
     });
     db.setActivity(t.id, [...base, ...act]);
     finishRun(t, buf, done);
@@ -181,7 +181,7 @@ app.get("/api/reply", async (req, res) => {
   try {
     const done = await followUp(ai, {
       ticket: t, previousInteractionId: t.interactionId, environmentId: t.environmentId, input: text,
-      onEvent: (e) => { if (e.text && (e.kind === "message" || e.kind === "output")) buf += e.text + "\n"; pushAct(act, e); if (++n % 3 === 0) db.setActivity(t.id, [...base, ...act]); send(e); },
+      onEvent: (e) => { if (e.text && (e.kind === "message" || e.kind === "output")) buf += e.text; /* no separator: deltas may split a URL mid-token */ pushAct(act, e); if (++n % 3 === 0) db.setActivity(t.id, [...base, ...act]); send(e); },
     });
     db.setActivity(t.id, [...base, ...act]);
     finishRun(t, buf, done);
