@@ -9,7 +9,7 @@
       (function() {
         const saved = localStorage.getItem("pulse-theme");
         const preferDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-        const theme = saved || (preferDark ? "dark" : "light");
+        const theme = saved || "light";
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
@@ -24,8 +24,8 @@
       </nav>
       <button id="create-btn" class="primary">+ Create</button>
       <button id="theme-toggle" class="theme-btn" aria-label="Toggle theme" title="Toggle theme">
-        <span class="theme-icon">🌙</span>
-        <span class="theme-text">Dark Mode</span>
+        <span class="theme-icon">☀️</span>
+        <span class="theme-text">Light Mode</span>
       </button>
     </header>
 
