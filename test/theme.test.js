@@ -5,7 +5,7 @@ import path from "node:path";
 
 test("Theme Defaults and Persistence Test Suite", async (t) => {
   await t.test("index.html initializes theme to light mode", () => {
-    const htmlPath = path.join("/workspace/pulse/public/index.html");
+    const htmlPath = path.join(process.cwd(), "public/index.html");
     const content = fs.readFileSync(htmlPath, "utf8");
     
     // Validate initialization script defaults to "light" when no saved preference exists
@@ -17,7 +17,7 @@ test("Theme Defaults and Persistence Test Suite", async (t) => {
   });
 
   await t.test("app.js theme coordinator defaults to light mode", () => {
-    const appPath = path.join("/workspace/pulse/public/app.js");
+    const appPath = path.join(process.cwd(), "public/app.js");
     const content = fs.readFileSync(appPath, "utf8");
     
     // Validate that the fallback theme is 'light'
