@@ -24,6 +24,7 @@ export function createTicket({ title, type = "feature", priority = "medium", des
     assignee: "antigravity",
     attachments,       // [{name, dataUrl}]
     crew: [],
+    activity: [],      // persisted live-agent log: [{kind, text}]
     prUrl: null, prNumber: null, testUrl: null,
     interactionId: null, environmentId: null,  // reused sandbox for this ticket
     comments: [],      // {author:'agent'|'user'|'system', kind:'question'|'answer'|'note', text, ts}
@@ -38,6 +39,14 @@ export function addAttachment(id, att) {
   const t = getTicket(id);
   if (t) { (t.attachments ||= []).push(att); save(); }
   return t;
+}
+
+// Persist the live-agent activity log so it's auditable after the run / across refreshes.
+export function appendActivity(id, events) {
+  const t = getTicket(id);
+  if (!t || !events?.length) return;
+  t.activity = [...(t.activity || []), ...events].slice(-800);
+  save();
 }
 
 export const listTickets = () => state.tickets;
@@ -64,6 +73,8 @@ export function addRun(run) {
 export const listRuns = () => state.runs;
 
 if (state.tickets.length === 0) {
+  // Curated demo board: one clean feature, one intentionally-vague (triggers QUESTION), one bug.
   createTicket({ title: "Add a /health endpoint to server.js that returns { ok: true }", type: "feature", priority: "high" });
-  createTicket({ title: "Add a short 'Architecture' section to README.md", type: "feature", priority: "medium" });
+  createTicket({ title: "Add rate limiting to the API endpoints", type: "feature", priority: "medium" });
+  createTicket({ title: "Fix: /api/runs should return the newest runs first", type: "bug", priority: "high" });
 }

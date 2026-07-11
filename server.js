@@ -36,6 +36,13 @@ function cost(usage) {
   return (usage.total_input_tokens || 0) * RATE_IN + (usage.total_output_tokens || 0) * RATE_OUT;
 }
 const lastMatch = (re, s) => { let m, out = null; while ((m = re.exec(s))) out = m; re.lastIndex = 0; return out; };
+// coalesce streamed events into a compact activity log
+function pushAct(arr, e) {
+  if (!e || (!e.text && e.kind !== "status")) return;
+  const last = arr[arr.length - 1];
+  if (last && last.kind === e.kind && (e.kind === "message" || e.kind === "thought")) last.text += e.text;
+  else arr.push({ kind: e.kind, text: e.text || "" });
+}
 
 // Shared post-run processing: cost/time, PR + question detection, comments, run history.
 function finishRun(ticket, buffer, done) {
@@ -129,15 +136,16 @@ app.get("/api/run", async (req, res) => {
   const t = db.getTicket(req.query.id);
   if (!t) { send({ kind: "error", text: "no ticket" }); return res.end(); }
   db.updateTicket(t.id, { status: "doing" });
-  let buf = "";
+  let buf = "", act = [];
   try {
     const done = await runSpecialist(ai, {
-      ticket: t, specialist: (t.crew || [])[0] || {},
-      onEvent: (e) => { if (e.text && (e.kind === "message" || e.kind === "output")) buf += e.text + "\n"; send(e); },
+      ticket: t, crew: t.crew || [],
+      onEvent: (e) => { if (e.text && (e.kind === "message" || e.kind === "output")) buf += e.text + "\n"; pushAct(act, e); send(e); },
     });
+    db.appendActivity(t.id, act);
     finishRun(t, buf, done);
     send({ kind: "ticket" }); send({ kind: "end" });
-  } catch (e) { send({ kind: "error", text: String(e?.message || e) }); }
+  } catch (e) { db.appendActivity(t.id, [...act, { kind: "error", text: String(e?.message || e) }]); send({ kind: "error", text: String(e?.message || e) }); }
   res.end();
 });
 
@@ -149,16 +157,18 @@ app.get("/api/reply", async (req, res) => {
   if (!t) { send({ kind: "error", text: "no ticket" }); return res.end(); }
   if (!t.interactionId) { send({ kind: "error", text: "no active sandbox for this ticket" }); return res.end(); }
   db.addComment(t.id, { author: "user", kind: "answer", text });
+  db.appendActivity(t.id, [{ kind: "status", text: "↪ steer: " + text }]);
   db.updateTicket(t.id, { status: "doing" });
-  let buf = "";
+  let buf = "", act = [];
   try {
     const done = await followUp(ai, {
       ticket: t, previousInteractionId: t.interactionId, environmentId: t.environmentId, input: text,
-      onEvent: (e) => { if (e.text && (e.kind === "message" || e.kind === "output")) buf += e.text + "\n"; send(e); },
+      onEvent: (e) => { if (e.text && (e.kind === "message" || e.kind === "output")) buf += e.text + "\n"; pushAct(act, e); send(e); },
     });
+    db.appendActivity(t.id, act);
     finishRun(t, buf, done);
     send({ kind: "ticket" }); send({ kind: "end" });
-  } catch (e) { send({ kind: "error", text: String(e?.message || e) }); }
+  } catch (e) { db.appendActivity(t.id, [...act, { kind: "error", text: String(e?.message || e) }]); send({ kind: "error", text: String(e?.message || e) }); }
   res.end();
 });
 

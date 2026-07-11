@@ -113,7 +113,11 @@ function renderAnalytics() {
 }
 
 // ---------------- issue modal ----------------
-function openIssue(id) { openId = id; $("#scrim").hidden = false; $("#issue").hidden = false; renderIssue(); }
+function openIssue(id) {
+  openId = id;
+  if (!logs.has(id)) { const t = T(id); if (t?.activity?.length) logs.set(id, t.activity.map((a) => ({ ...a }))); } // show persisted log
+  $("#scrim").hidden = false; $("#issue").hidden = false; renderIssue();
+}
 function closeIssue() { openId = null; $("#scrim").hidden = true; $("#issue").hidden = true; if (es) es.close(); }
 
 function renderIssue() {
@@ -209,7 +213,7 @@ function stream(url, id) {
     if (e.kind === "done") return;
     if (e.text) pushLog(id, e.kind, e.text);
   };
-  es.onerror = () => es.close();
+  es.onerror = () => { es.close(); loadAll(); }; // dropped stream → resync from server truth
 }
 
 // ---------------- create + attachments ----------------
@@ -255,5 +259,7 @@ $("#scrim").onclick = closeIssue;
 
 // boot
 await loadAll();
+// backstop: if a run is in-flight, poll so the card converges even if the SSE stream dropped
+setInterval(() => { if (tickets.some((t) => t.status === "doing")) loadAll(); }, 8000);
 const qp = new URLSearchParams(location.search).get("ticket");
 if (qp && T(qp)) openIssue(qp);

@@ -10,11 +10,16 @@ const QUESTION_RULE = `If you hit a decision that MATERIALLY changes the impleme
 unsure, do NOT guess: output a single line starting with "QUESTION: " followed by one clear question,
 then STOP without making further changes. The user's answer will be sent back to you in this same sandbox.`;
 
-function specialistInstruction(specialist, ticket) {
+function specialistInstruction(crew, ticket) {
   const REPO = repo();
-  const name = specialist?.name || "Engineer";
-  const role = specialist?.role || "software engineer";
-  return `You are "${name}" — ${role}, working ticket ${ticket.key} in the repo cloned at /workspace/pulse.
+  const list = (crew && crew.length ? crew : [{ name: "Engineer", role: "software engineer" }]);
+  const lead = list[0];
+  const roster = list.map((s, i) => `  ${i + 1}. ${s.name} — ${s.role}${s.responsibilities ? ": " + s.responsibilities : ""}${i === 0 ? " (LEAD)" : ""}`).join("\n");
+  return `You are an autonomous engineering crew assembled for ticket ${ticket.key}, working in the repo
+cloned at /workspace/pulse. Your crew, each with a distinct expertise:
+${roster}
+
+Embody ALL of these specialists as you work — apply each one's perspective (${lead.name} leads).
 Keep narration short and concrete. A GitHub token is in /workspace/.gh_token.
 
 ${QUESTION_RULE}
@@ -22,7 +27,11 @@ ${QUESTION_RULE}
 When the change is complete, ship it as a pull request:
 1. cd /workspace/pulse && git config user.email "agent@pulse.dev" && git config user.name "Pulse Agent"
 2. Create a branch named ${ticket.key.toLowerCase()}-<short-slug>
-2b. Run \`npm ci && npm test\` and make sure the test suite PASSES before opening the PR. Fix anything you broke.
+2b. Verify the build, echoing progress so it's visible:
+      echo "▶ installing dependencies…" && npm ci
+      echo "▶ running tests…" && npm test
+      echo "✓ tests passed"
+    The suite MUST pass before you open the PR — fix anything you broke.
 3. Make the changes, then: git add -A && git commit -m "${ticket.key}: <concise message>"
 4. git remote set-url origin "https://x-access-token:$(cat /workspace/.gh_token)@github.com/${REPO}.git"
 5. git push -u origin <branch>
@@ -79,11 +88,11 @@ async function pump(stream, onEvent) {
   return done;
 }
 
-export async function runSpecialist(ai, { ticket, specialist, onEvent }) {
+export async function runSpecialist(ai, { ticket, crew, onEvent }) {
   const stream = await ai.interactions.create({
     agent: AGENT,
     input: ticket.title,
-    system_instruction: specialistInstruction(specialist, ticket),
+    system_instruction: specialistInstruction(crew, ticket),
     environment: {
       type: "remote",
       sources: [
