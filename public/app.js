@@ -2,10 +2,10 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const api = (u, o) => fetch(u, o).then((r) => r.json());
 const esc = (s) => (s || "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-const linkify = (s) => s.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
+const linkify = (s) => s.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 
 const COLS = [{ id: "todo", label: "To Do" }, { id: "doing", label: "In Progress" }, { id: "review", label: "In Review" }, { id: "done", label: "Done" }];
-const AV = ["#7c5cff", "#35d0a5", "#ffb454", "#ff6b6b", "#4dabf7", "#e599f7"];
+const AV = ["#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899"];
 const initials = (n) => (n || "?").split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
 let tickets = [], runs = [], view = "board", openId = null, es = null, createAtts = [];
@@ -16,8 +16,13 @@ async function loadAll() {
   [tickets, runs] = await Promise.all([api("/api/tickets"), api("/api/runs")]);
   render();
 }
+
 function render() {
-  $$("#nav button").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+  $$("#nav button").forEach((b) => {
+    const active = b.dataset.view === view;
+    b.classList.toggle("active", active);
+    b.setAttribute("aria-selected", active ? "true" : "false");
+  });
   ["board", "runs", "analytics"].forEach((v) => ($(`#view-${v}`).hidden = v !== view));
   if (view === "board") renderBoard();
   if (view === "runs") renderRuns();
@@ -34,7 +39,8 @@ function renderBoard() {
     const items = tickets.filter((t) => col.id === "done" ? (t.status === "done" || t.status === "obsolete") : t.status === col.id);
     const el = document.createElement("section");
     el.className = "col";
-    el.innerHTML = `<div class="col-h">${col.label}<span class="count">${items.length}</span></div><div class="col-cards"></div>`;
+    el.setAttribute("aria-label", col.label);
+    el.innerHTML = `<div class="col-h" id="h-${col.id}">${col.label}<span class="count">${items.length}</span></div><div class="col-cards" role="list" aria-labelledby="h-${col.id}"></div>`;
     const cards = $(".col-cards", el);
     items.forEach((t) => cards.appendChild(cardEl(t)));
     el.addEventListener("dragover", (e) => { e.preventDefault(); el.classList.add("drop"); });
@@ -49,20 +55,32 @@ function renderBoard() {
     board.appendChild(el);
   }
 }
+
 function cardEl(t) {
   const el = document.createElement("div");
   el.className = "card" + (t.status === "doing" ? " running" : "") + (t.status === "obsolete" ? " obsolete" : "");
   el.draggable = true;
+  el.setAttribute("role", "listitem");
+  el.setAttribute("tabindex", "0");
+  el.setAttribute("aria-label", `${t.type === "bug" ? "Bug" : "Feature"} ticket ${t.key}: ${t.title}`);
+  
   const badge = t.status === "obsolete" ? `<span class="badge obsolete">obsolete</span>`
     : t.prNumber ? `<span class="badge pr">PR #${t.prNumber}</span>`
     : t.status === "waiting" ? `<span class="badge waiting">needs you</span>`
     : t.status === "doing" ? `<span class="badge running">running…</span>` : "";
   const avatars = (t.crew || []).slice(0, 4).map((s, i) => `<span class="avatar" style="background:${AV[i % AV.length]}" title="${esc(s.name)}">${initials(s.name)}</span>`).join("");
-  const thumb = (t.attachments || [])[0] ? `<img class="thumb-mini" src="${t.attachments[0].dataUrl}" />` : "";
-  el.innerHTML = `<div class="card-top"><span class="flag ${t.type}">${t.type === "bug" ? "🐞 Bug" : "✨ Feature"}</span><span class="key">${t.key}</span><span class="prio ${t.priority}"></span></div>
+  const thumb = (t.attachments || [])[0] ? `<img class="thumb-mini" src="${t.attachments[0].dataUrl}" alt="Attachment preview" />` : "";
+  el.innerHTML = `<div class="card-top"><span class="flag ${t.type}">${t.type === "bug" ? "🐞 Bug" : "✨ Feature"}</span><span class="key">${t.key}</span><span class="prio ${t.priority}" title="Priority: ${t.priority}"></span></div>
     <div class="card-title">${esc(t.title)}</div>${thumb}
     <div class="card-foot"><div class="avatars">${avatars}</div>${badge}</div>`;
+  
   el.onclick = () => openIssue(t.id);
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openIssue(t.id);
+    }
+  });
   el.addEventListener("dragstart", (e) => e.dataTransfer.setData("id", t.id));
   return el;
 }
@@ -72,9 +90,9 @@ function renderRuns() {
   const rows = runs.map((r) => `<tr><td><span class="k">${r.key}</span></td><td>${esc(r.title)}</td>
     <td>${(r.tokens || 0).toLocaleString()}</td><td>$${(r.costUsd || 0).toFixed(4)}</td>
     <td>${r.durationSec ? Math.round(r.durationSec) + "s" : "—"}</td><td>${new Date(r.ts).toLocaleString()}</td></tr>`).join("");
-  $("#view-runs").innerHTML = `<div class="page"><h1>Runs</h1>
+  $("#view-runs").innerHTML = `<div class="page"><h1>Runs</h1><div class="table-container">
     <table class="runs"><thead><tr><th>Ticket</th><th>Title</th><th>Tokens</th><th>Est. cost</th><th>Duration</th><th>When</th></tr></thead>
-    <tbody>${rows || `<tr><td colspan="6" style="color:var(--faint)">No runs yet.</td></tr>`}</tbody></table></div>`;
+    <tbody>${rows || `<tr><td colspan="6" style="color:var(--faint); text-align: center; padding: 24px;">No runs yet.</td></tr>`}</tbody></table></div></div>`;
 }
 
 // ---------------- analytics ----------------
@@ -90,7 +108,7 @@ function renderAnalytics() {
   const maxTok = Math.max(1, ...days.map((d) => byDay[d].tok));
   const maxN = Math.max(1, ...days.map((d) => byDay[d].n));
   const bars = (val, max, alt) => days.map((d) => {
-    const h = Math.round((val(d) / max) * 130);
+    const h = Math.round((val(d) / max) * 150);
     return `<div class="bar-wrap"><span class="bar-val">${val(d) >= 1000 ? (val(d) / 1000).toFixed(1) + "k" : val(d)}</span><div class="bar ${alt ? "alt" : ""}" style="height:${h}px"></div><span class="bar-lbl">${d.slice(5)}</span></div>`;
   }).join("") || `<div style="color:var(--faint)">No data yet.</div>`;
 
@@ -106,9 +124,9 @@ function renderAnalytics() {
       <div class="chart"><h3>Tokens per day</h3><div class="bars">${bars((d) => byDay[d].tok, maxTok, false)}</div></div>
       <div class="chart"><h3>Runs per day</h3><div class="bars">${bars((d) => byDay[d].n, maxN, true)}</div></div>
     </div>
-    <div class="chart" style="margin-top:16px"><h3>Tickets by status</h3>
-      <div class="bars">${COLS.map((c) => { const n = tickets.filter((t) => t.status === c.id).length; const h = Math.round((n / Math.max(1, tickets.length)) * 130); return `<div class="bar-wrap"><span class="bar-val">${n}</span><div class="bar" style="height:${h}px"></div><span class="bar-lbl">${c.label}</span></div>`; }).join("")}
-      <div class="bar-wrap"><span class="bar-val">${done}</span><div class="bar alt" style="height:${Math.round((done / Math.max(1, tickets.length)) * 130)}px\"></div><span class="bar-lbl">Closed</span></div></div></div>
+    <div class="chart" style="margin-top:20px"><h3>Tickets by status</h3>
+      <div class="bars">${COLS.map((c) => { const n = tickets.filter((t) => t.status === c.id).length; const h = Math.round((n / Math.max(1, tickets.length)) * 150); return `<div class="bar-wrap"><span class="bar-val">${n}</span><div class="bar" style="height:${h}px"></div><span class="bar-lbl">${c.label}</span></div>`; }).join("")}
+      <div class="bar-wrap"><span class="bar-val">${done}</span><div class="bar alt" style="height:${Math.round((done / Math.max(1, tickets.length)) * 150)}px"></div><span class="bar-lbl">Closed</span></div></div></div>
   </div>`;
 }
 
@@ -117,43 +135,53 @@ function openIssue(id) {
   openId = id;
   if (!logs.has(id)) { const t = T(id); if (t?.activity?.length) logs.set(id, t.activity.map((a) => ({ ...a }))); } // show persisted log
   $("#scrim").hidden = false; $("#issue").hidden = false; renderIssue();
+  $("#iss-close").focus();
 }
-function closeIssue() { openId = null; $("#scrim").hidden = true; $("#issue").hidden = true; if (es) es.close(); }
+
+function closeIssue() {
+  openId = null;
+  $("#scrim").hidden = true;
+  $("#issue").hidden = true;
+  if (es) es.close();
+  // Return focus to the ticket card
+  const card = $$(".card").find((el) => el.innerHTML.includes(T(openId)?.key || ""));
+  if (card) card.focus();
+}
 
 function renderIssue() {
   const t = T(openId); if (!t) return;
-  const agents = (t.crew || []).length ? (t.crew || []).map((s, i) => `<div class="agent-row"><span class="avatar" style="background:${AV[i % AV.length]}">${initials(s.name)}</span><div><div class="nm">${esc(s.name)}</div><div class="rl">${esc(s.role || "")}</div></div><span class="tag">${i === 0 ? "lead" : "member"}</span></div>`).join("") : `<div style="color:var(--faint);font-size:13px">No crew yet — start work to spawn the crew.</div>`;
-  const atts = (t.attachments || []).map((a, i) => `<img src="${a.dataUrl}" title="${esc(a.name)}" onclick="window.open('${a.dataUrl}')" />`).join("");
-  const comments = (t.comments || []).filter((c) => !c.text || !c.text.includes("Test environment")).map((c) => `<div class="comment ${c.author} ${c.kind === "question" ? "question" : ""}"><div class="c-who">${c.author === "agent" ? "🤖 Antigravity" : c.author === "user" ? "🧑 Pathik" : "•"}${c.kind === "question" ? " · asks" : ""}</div><div>${linkify(esc(c.text))}</div></div>`).join("") || `<div style="color:var(--faint);font-size:13px">No comments yet.</div>`;
+  const agents = (t.crew || []).length ? (t.crew || []).map((s, i) => `<div class="agent-row"><span class="avatar" style="background:${AV[i % AV.length]}">${initials(s.name)}</span><div><div class="nm">${esc(s.name)}</div><div class="rl">${esc(s.role || "")}</div></div><span class="tag">${i === 0 ? "lead" : "member"}</span></div>`).join("") : `<div style="color:var(--faint);font-size:13.5px;font-style:italic">No crew yet — start work to spawn the crew.</div>`;
+  const atts = (t.attachments || []).map((a, i) => `<img src="${a.dataUrl}" title="${esc(a.name)}" alt="${esc(a.name)}" onclick="window.open('${a.dataUrl}')" />`).join("");
+  const comments = (t.comments || []).filter((c) => !c.text || !c.text.includes("Test environment")).map((c) => `<div class="comment ${c.author} ${c.kind === "question" ? "question" : ""}"><div class="c-who">${c.author === "agent" ? "🤖 Antigravity" : c.author === "user" ? "🧑 Pathik" : "•"}${c.kind === "question" ? " · asks" : ""}</div><div>${linkify(esc(c.text))}</div></div>`).join("") || `<div style="color:var(--faint);font-size:13.5px;font-style:italic">No comments yet.</div>`;
   const canReply = ["waiting", "review", "doing"].includes(t.status);
   const isPreview = t.testUrl && /localhost:31\d\d/.test(t.testUrl);
   const prBlock = t.prUrl ? `<div class="pr-actions">
-      <a class="pr" href="${t.prUrl}" target="_blank">View PR #${t.prNumber}</a>
+      <a class="pr" href="${t.prUrl}" target="_blank" rel="noopener noreferrer">View PR #${t.prNumber}</a>
       <button id="preview-btn">🚀 Spin up live preview</button>
-      ${isPreview ? `<a href="${t.testUrl}" target="_blank">🧪 Open preview (:${t.testUrl.split(":").pop()})</a>` : ""}
+      ${isPreview ? `<a href="${t.testUrl}" target="_blank" rel="noopener noreferrer">🧪 Open preview (:${t.testUrl.split(":").pop()})</a>` : ""}
       <button id="close-pr">Close PR</button></div>` : "";
   const STATUSES = { todo: "To Do", doing: "In Progress", waiting: "Needs you", review: "In Review", done: "Done", obsolete: "Obsolete" };
 
   $("#issue").innerHTML = `
     <div class="iss-head"><span class="flag ${t.type}">${t.type === "bug" ? "🐞 Bug" : "✨ Feature"}</span>
       <span class="crumbs">${t.key}</span>
-      <select class="status-sel" id="iss-status">${Object.entries(STATUSES).filter(([k]) => k !== "waiting").map(([k, v]) => `<option value="${k}" ${t.status === k ? "selected" : ""}>${v}</option>`).join("")}</select>
-      <button class="iss-close" id="iss-close">×</button></div>
+      <select class="status-sel" id="iss-status" aria-label="Status">${Object.entries(STATUSES).filter(([k]) => k !== "waiting").map(([k, v]) => `<option value="${k}" ${t.status === k ? "selected" : ""}>${v}</option>`).join("")}</select>
+      <button class="iss-close" id="iss-close" aria-label="Close dialog">×</button></div>
     <div class="iss-cols">
       <div class="iss-main">
-        <h2>${esc(t.title)}</h2>
+        <h2 id="iss-title">${esc(t.title)}</h2>
         <div class="sec"><div class="sec-t">Description</div><div class="desc ${t.description ? "" : "empty"}">${t.description ? linkify(esc(t.description)) : "No description."}</div></div>
-        <div class="sec"><div class="sec-t">Attachments</div><div class="thumbs" id="iss-thumbs">${atts || '<span style="color:var(--faint);font-size:12.5px">Paste a screenshot while this is open to attach.</span>'}</div></div>
+        <div class="sec"><div class="sec-t">Attachments</div><div class="thumbs" id="iss-thumbs">${atts || '<span style="color:var(--faint);font-size:13px;font-style:italic">Paste a screenshot while this is open to attach.</span>'}</div></div>
         <div class="sec"><div class="sec-t">Agents (${(t.crew || []).length})</div><div class="agent-list">${agents}</div></div>
         <div class="sec"><div class="sec-t">Live activity</div><div class="log" id="iss-log"></div></div>
         <div class="sec"><div class="sec-t">Comments</div><div class="comments">${comments}</div>
-          ${canReply ? `<form class="reply" id="reply"><input placeholder="${t.status === "waiting" ? "Answer the agent…" : "Comment / steer the agent…"}" autocomplete="off"/><button class="primary">Send</button></form>` : ""}</div>
+          ${canReply ? `<form class="reply" id="reply" aria-label="Add a comment"><input placeholder="${t.status === "waiting" ? "Answer the agent…" : "Comment / steer the agent…"}" autocomplete="off" aria-label="Comment text" /><button class="primary">Send</button></form>` : ""}</div>
       </div>
       <div class="iss-rail">
         ${t.status === "todo" ? `<button class="startwork" id="startwork">▶ Start work</button><div style="height:16px"></div>` : ""}
         ${prBlock ? `<div class="rail-row"><div class="rl-l">Pull request</div>${prBlock}</div>` : ""}
-        <div class="rail-row"><div class="rl-l">Assignee</div><div class="rl-v"><div class="who"><span class=\"avatar\" style=\"background:${AV[0]}\">AG</span>Antigravity</div></div></div>
-        <div class="rail-row"><div class="rl-l">Reporter</div><div class="rl-v"><div class="who"><span class=\"avatar\" style=\"background:${AV[3]}\">PK</span>Pathik</div></div></div>
+        <div class="rail-row"><div class="rl-l">Assignee</div><div class="rl-v"><div class="who"><span class="avatar" style="background:${AV[0]}">AG</span>Antigravity</div></div></div>
+        <div class="rail-row"><div class="rl-l">Reporter</div><div class="rl-v"><div class="who"><span class="avatar" style="background:${AV[3]}">PK</span>Pathik</div></div></div>
         <div class="rail-row"><div class="rl-l">Priority</div><div class="rl-v"><span class="prio ${t.priority}"></span> ${t.priority}</div></div>
         <div class="rail-row"><div class="rl-l">Type</div><div class="rl-v">${t.type === "bug" ? "🐞 Bug" : "✨ Feature"}</div></div>
         <div class="rail-row"><div class="rl-l">Labels</div><div class="rl-v">${t.prNumber ? '<span class="pill">antigravity</span>' : "—"}</div></div>
@@ -218,7 +246,7 @@ function stream(url, id) {
 
 // ---------------- create + attachments ----------------
 function readImage(file) { return new Promise((res) => { const r = new FileReader(); r.onload = () => res({ name: file.name || "pasted.png", dataUrl: r.result }); r.readAsDataURL(file); }); }
-function renderCreateThumbs() { $("#c-thumbs").innerHTML = createAtts.map((a) => `<img src="${a.dataUrl}" />`).join(""); }
+function renderCreateThumbs() { $("#c-thumbs").innerHTML = createAtts.map((a) => `<img src="${a.dataUrl}" alt="Thumbnail preview" />`).join(""); }
 
 async function addFiles(files, target) {
   for (const f of files) {
