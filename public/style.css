@@ -257,6 +257,13 @@ a:hover {
   border: 1px solid var(--line);
 }
 
+.views {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .view {
   flex: 1;
   overflow: hidden;
@@ -695,6 +702,9 @@ table.runs tr:hover td {
     grid-template-columns: 1fr;
     overflow-y: auto;
   }
+  .iss-main {
+    overflow: visible;
+  }
 }
 .iss-main {
   overflow-y: auto;
@@ -718,6 +728,7 @@ table.runs tr:hover td {
   .iss-rail {
     border-left: 0;
     border-top: 1px solid var(--line);
+    overflow: visible;
   }
 }
 
