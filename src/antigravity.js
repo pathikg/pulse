@@ -10,17 +10,32 @@ const QUESTION_RULE = `If you hit a decision that MATERIALLY changes the impleme
 unsure, do NOT guess: output a single line starting with "QUESTION: " followed by one clear question,
 then STOP without making further changes. The user's answer will be sent back to you in this same sandbox.`;
 
-function specialistInstruction(crew, ticket) {
+function specialistInstruction(crew, ticket, repoMap = "") {
   const REPO = repo();
   const list = (crew && crew.length ? crew : [{ name: "Engineer", role: "software engineer" }]);
   const lead = list[0];
   const roster = list.map((s, i) => `  ${i + 1}. ${s.name} — ${s.role}${s.responsibilities ? ": " + s.responsibilities : ""}${i === 0 ? " (LEAD)" : ""}`).join("\n");
+  const map = repoMap ? `\n\n${repoMap}\n` : "";
   return `You are an autonomous engineering crew assembled for ticket ${ticket.key}, working in the repo
 cloned at /workspace/pulse. Your crew, each with a distinct expertise:
 ${roster}
+${map}
 
 Embody ALL of these specialists as you work — apply each one's perspective (${lead.name} leads).
 Keep narration short and concrete. A GitHub token is in /workspace/.gh_token.
+
+COST DISCIPLINE — you are billed per token and the whole transcript is re-sent to the model on
+every step, so context bloat is quadratic. Be surgical:
+- Explore minimally. Read only the specific files/sections you need, ONCE. Do not repeatedly grep
+  or sed the same file, and do not re-list directories you have already seen.
+- NEVER run \`git log -p\`, \`git show <sha>\`, or otherwise dump commit patches / large diffs into
+  the terminal — that floods context with tens of thousands of tokens that get re-sent every turn.
+  Use \`git diff --stat\` if you must inspect changes.
+- Do not cat or print large files (e.g. style.css) in full. Open targeted line ranges only if needed.
+- Run \`npm ci\` and \`npm test\` AT MOST ONCE, right before opening the PR. Do not re-run them to
+  "double-check". If a test fails, read only the failing output and fix it — don't re-run the whole
+  suite repeatedly.
+- Make edits decisively; avoid trial-and-error loops.
 
 ${QUESTION_RULE}
 
@@ -88,11 +103,11 @@ async function pump(stream, onEvent) {
   return done;
 }
 
-export async function runSpecialist(ai, { ticket, crew, onEvent }) {
+export async function runSpecialist(ai, { ticket, crew, repoMap, onEvent }) {
   const stream = await ai.interactions.create({
     agent: AGENT,
     input: ticket.title,
-    system_instruction: specialistInstruction(crew, ticket),
+    system_instruction: specialistInstruction(crew, ticket, repoMap),
     environment: {
       type: "remote",
       sources: [

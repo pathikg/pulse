@@ -49,6 +49,15 @@ export function appendActivity(id, events) {
   save();
 }
 
+// Replace the whole activity log with a snapshot (used for incremental persistence mid-run,
+// so a page reload during a run still shows the log so far, not a blank panel).
+export function setActivity(id, events) {
+  const t = getTicket(id);
+  if (!t) return;
+  t.activity = (events || []).slice(-800);
+  save();
+}
+
 export const listTickets = () => state.tickets;
 export const getTicket = (id) => state.tickets.find((t) => t.id === id);
 export function updateTicket(id, patch) { const t = getTicket(id); if (t) { Object.assign(t, patch); save(); } return t; }
