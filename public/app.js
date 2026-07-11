@@ -143,23 +143,64 @@ async function reindex() {
   try { await api("/api/reindex", { method: "POST" }); await loadAll(); }
   catch (e) { if (btn) { btn.textContent = "↻ Reindex (failed, retry)"; btn.disabled = false; } }
 }
+const GTYPES = { module: "#8b5cf6", endpoint: "#10b981", external: "#f59e0b", concept: "#3b82f6" };
+let graphSig = null, graphAnim = null;
 function renderGraph() {
-  const mods = (wiki?.modules) || [];
-  const W = 780, H = 440, cx = W / 2, cy = H / 2, R = 165;
-  const pos = {};
-  mods.forEach((m, i) => { const a = -Math.PI / 2 + 2 * Math.PI * i / Math.max(1, mods.length); pos[m.file] = { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) }; });
-  const short = (f) => f.split("/").pop();
-  const edges = mods.flatMap((m) => (m.dependsOn || []).filter((d) => pos[d]).map((d) => ({ from: m.file, to: d })));
-  const lines = edges.map((e) => `<line x1="${pos[e.from].x.toFixed(1)}" y1="${pos[e.from].y.toFixed(1)}" x2="${pos[e.to].x.toFixed(1)}" y2="${pos[e.to].y.toFixed(1)}" stroke="var(--line2,#333)" stroke-width="1.5" marker-end="url(#arw)"/>`).join("");
-  const nodes = mods.map((m, i) => { const p = pos[m.file], c = AV[i % AV.length]; return `<g transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})"><circle r="30" fill="${c}22" stroke="${c}" stroke-width="2"/><text text-anchor="middle" dy="4" fill="var(--text)" font-size="10.5" font-weight="600">${short(m.file)}</text></g>`; }).join("");
-  const cards = mods.map((m, i) => `<div class="wiki-card"><div class="wc-h"><span class="dot" style="background:${AV[i % AV.length]}"></span>${esc(m.file)}</div><div class="wc-role">${esc(m.role || "")}</div><div class="wc-sum">${esc(m.summary || "")}</div>${(m.dependsOn || []).length ? `<div class="wc-deps">→ ${m.dependsOn.map(esc).join(", ")}</div>` : ""}</div>`).join("");
-  $("#view-graph").innerHTML = `<div class="page">
-    <div class="graph-head"><h1>Codebase Wiki</h1><button id="reindex-btn" class="primary">↻ Reindex</button></div>
-    <div class="muted-line">${wiki?.generatedAt ? `Indexed ${new Date(wiki.generatedAt).toLocaleString()} · ${mods.length} modules · ${esc(wiki.model || "Gemini 3.5 Flash")} · fed to Antigravity to cut exploration tokens` : "Not indexed yet — click Reindex to build the map with Gemini 3.5 Flash."}</div>
-    ${mods.length ? `<div class="graph-wrap"><svg viewBox="0 0 ${W} ${H}" class="depgraph"><defs><marker id="arw" markerWidth="9" markerHeight="9" refX="34" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="var(--faint,#888)"/></marker></defs>${lines}${nodes}</svg></div>
-    <div class="wiki-cards">${cards}</div>` : ""}
+  const nodes0 = wiki?.nodes || [], edges0 = wiki?.edges || [];
+  const sig = (wiki?.generatedAt || "") + "/" + nodes0.length;
+  // don't rebuild (and reset physics) on background polls — only when the index changes
+  if (sig === graphSig && $("#gsvg")) return;
+  graphSig = sig;
+  if (graphAnim) { cancelAnimationFrame(graphAnim); graphAnim = null; }
+
+  $("#view-graph").innerHTML = `<div class="graph-page">
+    <div class="graph-head"><h1>Codebase Wiki</h1>
+      <div class="glegend">${Object.entries(GTYPES).map(([k, c]) => `<span><i style="background:${c}"></i>${k}</span>`).join("")}</div>
+      <button id="reindex-btn" class="primary">↻ Reindex</button></div>
+    <div class="muted-line">${wiki?.generatedAt ? `${nodes0.length} nodes · ${edges0.length} edges · ${esc(wiki.model || "Gemini 3.5 Flash")} · indexed ${new Date(wiki.generatedAt).toLocaleString()} · fed to Antigravity as a REPO MAP to cut exploration tokens` : "Not indexed yet — click Reindex to build the graph with Gemini 3.5 Flash."}</div>
+    <div class="gcanvas" id="gcanvas"><svg id="gsvg"><g id="gzoom"><g id="gedges"></g><g id="gnodes"></g></g></svg><div class="ghint">drag nodes · scroll to zoom · drag background to pan</div></div>
   </div>`;
   if ($("#reindex-btn")) $("#reindex-btn").onclick = reindex;
+  if (!nodes0.length) return;
+
+  const canvas = $("#gcanvas"), svg = $("#gsvg"), zoomG = $("#gzoom");
+  const W = canvas.clientWidth || 900, H = canvas.clientHeight || 520;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const idx = {};
+  const N = nodes0.map((n, i) => { idx[n.id] = i; return { ...n, x: W / 2 + (Math.random() - .5) * W * .6, y: H / 2 + (Math.random() - .5) * H * .6, vx: 0, vy: 0 }; });
+  const E = edges0.map((e) => ({ s: idx[e.source], t: idx[e.target] })).filter((e) => e.s != null && e.t != null);
+  const k = Math.sqrt((W * H) / Math.max(1, N.length)) * 0.72;
+  let temp = W / 8;
+
+  const gE = $("#gedges"), gN = $("#gnodes");
+  gE.innerHTML = E.map(() => `<line stroke="var(--line2,#444)" stroke-width="1" opacity="0.6"/>`).join("");
+  gN.innerHTML = N.map((n, i) => { const c = GTYPES[n.type] || "#888", r = n.type === "module" ? 14 : n.type === "concept" ? 11 : 9; return `<g class="gn" data-i="${i}"><circle r="${r}" fill="${c}33" stroke="${c}" stroke-width="1.8"/><text dy="-${r + 4}" text-anchor="middle" fill="var(--text)" font-size="9.5">${esc(n.label)}</text></g>`; }).join("");
+  const lineEls = [...gE.children], nodeEls = [...gN.children];
+
+  function draw() {
+    for (let i = 0; i < E.length; i++) { const l = lineEls[i], a = N[E[i].s], b = N[E[i].t]; l.setAttribute("x1", a.x.toFixed(1)); l.setAttribute("y1", a.y.toFixed(1)); l.setAttribute("x2", b.x.toFixed(1)); l.setAttribute("y2", b.y.toFixed(1)); }
+    for (let i = 0; i < N.length; i++) nodeEls[i].setAttribute("transform", `translate(${N[i].x.toFixed(1)},${N[i].y.toFixed(1)})`);
+  }
+  function step() {
+    for (let i = 0; i < N.length; i++) { let fx = 0, fy = 0; for (let j = 0; j < N.length; j++) { if (i === j) continue; let dx = N[i].x - N[j].x, dy = N[i].y - N[j].y, d = Math.hypot(dx, dy) || .01, rep = k * k / d; fx += dx / d * rep; fy += dy / d * rep; } N[i].vx = fx; N[i].vy = fy; }
+    for (const e of E) { const a = N[e.s], b = N[e.t]; let dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy) || .01, att = d * d / k, fx = dx / d * att, fy = dy / d * att; a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy; }
+    for (const n of N) { if (n.fixed) continue; n.vx += (W / 2 - n.x) * .012; n.vy += (H / 2 - n.y) * .012; const disp = Math.hypot(n.vx, n.vy) || .01; n.x += n.vx / disp * Math.min(disp, temp); n.y += n.vy / disp * Math.min(disp, temp); n.x = Math.max(24, Math.min(W - 24, n.x)); n.y = Math.max(24, Math.min(H - 24, n.y)); }
+    if (temp > 1.2) temp *= 0.975;
+    draw();
+    graphAnim = requestAnimationFrame(step);
+  }
+
+  let scale = 1, panx = 0, pany = 0, panning = false, sx = 0, sy = 0, drag = null;
+  const applyT = () => zoomG.setAttribute("transform", `translate(${panx},${pany}) scale(${scale})`);
+  const toLocal = (e) => { const r = svg.getBoundingClientRect(); return { x: ((e.clientX - r.left) / r.width * W - panx) / scale, y: ((e.clientY - r.top) / r.height * H - pany) / scale }; };
+  svg.onwheel = (e) => { e.preventDefault(); scale = Math.max(0.3, Math.min(3, scale * (e.deltaY < 0 ? 1.1 : 0.9))); applyT(); };
+  svg.onmousedown = (e) => { if (e.target.closest(".gn")) return; panning = true; sx = e.clientX - panx; sy = e.clientY - pany; };
+  gN.onmousedown = (e) => { const g = e.target.closest(".gn"); if (!g) return; e.stopPropagation(); drag = +g.dataset.i; N[drag].fixed = true; temp = Math.max(temp, W / 14); };
+  const onMove = (e) => { if (panning) { panx = e.clientX - sx; pany = e.clientY - sy; applyT(); } if (drag != null) { const p = toLocal(e); N[drag].x = p.x; N[drag].y = p.y; } };
+  const onUp = () => { panning = false; if (drag != null) { N[drag].fixed = false; drag = null; } };
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+  step();
 }
 
 // ---------------- issue modal ----------------

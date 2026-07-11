@@ -16,21 +16,33 @@ const FILES = ["server.js", "src/store.js", "src/planner.js", "src/antigravity.j
 const wikiSchema = {
   type: Type.OBJECT,
   properties: {
-    modules: {
+    nodes: {
       type: Type.ARRAY,
       items: {
         type: Type.OBJECT,
         properties: {
-          file: { type: Type.STRING, description: "path exactly as given" },
-          role: { type: Type.STRING, description: "one short phrase" },
-          summary: { type: Type.STRING, description: "1-2 sentences: what it does + key exports/endpoints" },
-          dependsOn: { type: Type.ARRAY, items: { type: Type.STRING }, description: "other listed files it imports or calls" },
+          id: { type: Type.STRING, description: "unique slug, e.g. 'server.js' or 'ep:POST /api/run' or 'ext:Antigravity'" },
+          label: { type: Type.STRING, description: "short display name" },
+          type: { type: Type.STRING, enum: ["module", "endpoint", "external", "concept"], description: "module=source file; endpoint=HTTP route; external=3rd-party service/tool; concept=cross-cutting idea" },
+          file: { type: Type.STRING, description: "for module nodes: the file path" },
+          summary: { type: Type.STRING, description: "1 sentence: what it is / does" },
         },
-        required: ["file", "role", "summary", "dependsOn"],
+        required: ["id", "label", "type"],
+      },
+    },
+    edges: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          source: { type: Type.STRING, description: "node id" },
+          target: { type: Type.STRING, description: "node id" },
+        },
+        required: ["source", "target"],
       },
     },
   },
-  required: ["modules"],
+  required: ["nodes", "edges"],
 };
 
 export function readWiki() {
@@ -51,13 +63,21 @@ export async function buildWiki(ai) {
   const contents = files.map((f) => `### ${f.file}\n\`\`\`\n${f.src}\n\`\`\``).join("\n\n");
   const res = await ai.models.generateContent({
     model: "gemini-3.5-flash",
-    contents: `Here is the Pulse codebase. For each file, give its role, a 1-2 sentence summary ` +
-      `(mention key exports/endpoints), and which OTHER listed files it depends on (imports/calls). ` +
-      `Only reference files from this list.\n\n${contents}`,
+    contents: `Here is the Pulse codebase (a JIRA-like board that hands tickets to Google Antigravity ` +
+      `managed agents which open PRs). Build a KNOWLEDGE GRAPH of it. Emit nodes of these types:\n` +
+      `- module: one per source file (set file=path, summary=what it does + key exports).\n` +
+      `- endpoint: one per HTTP route you find (e.g. "POST /api/run", "GET /api/wiki"). label it that way.\n` +
+      `- external: third-party services/tools the code uses (e.g. Gemini API, Antigravity Managed Agents, ` +
+      `GitHub API, git worktree, SSE/browser, Express).\n` +
+      `- concept: cross-cutting ideas this system implements (e.g. Dynamic Crew Planning, Sandbox PR flow, ` +
+      `Live Activity Streaming, Cost Tracking, Codebase Wiki, Self-Dogfooding).\n` +
+      `Then emit edges connecting them: module→module imports, module→endpoint it defines, ` +
+      `module→external it calls, module/endpoint→concept it implements. Aim for a rich, connected graph ` +
+      `(~25-45 nodes). Ground everything in the actual source; do not invent files.\n\n${contents}`,
     config: {
       responseMimeType: "application/json",
       responseSchema: wikiSchema,
-      systemInstruction: "You are a code cartographer. Map this codebase into a concise dependency wiki. Return only JSON.",
+      systemInstruction: "You are a code cartographer. Map this codebase into a rich, connected knowledge graph. Return only JSON.",
     },
   });
   const wiki = JSON.parse(res.text);
@@ -69,7 +89,8 @@ export async function buildWiki(ai) {
 
 // Compact repo map injected into the agent's system prompt so it doesn't re-explore the tree.
 export function wikiToPrompt(wiki) {
-  if (!wiki?.modules?.length) return "";
+  const mods = (wiki?.nodes || []).filter((n) => n.type === "module");
+  if (!mods.length) return "";
   return "REPO MAP (authoritative — use this instead of grepping/reading the tree to orient):\n" +
-    wiki.modules.map((m) => `- ${m.file} — ${m.role}. ${m.summary}${m.dependsOn?.length ? " [deps: " + m.dependsOn.join(", ") + "]" : ""}`).join("\n");
+    mods.map((m) => `- ${m.file || m.label} — ${m.summary || m.label}`).join("\n");
 }
