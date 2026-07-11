@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pulse — self-building agent board</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Pulse<span class="dot">●</span></div>
+      <div class="tag">file a ticket · a crew assembles itself · a PR shows up</div>
+      <form id="new" class="new">
+        <input id="ticket" placeholder="Describe a ticket… e.g. Add a /health endpoint" autocomplete="off" />
+        <button>Add ticket</button>
+      </form>
+    </header>
+
+    <main class="board">
+      <section class="col" data-col="todo"><h2>To Do</h2><div class="cards" id="todo"></div></section>
+      <section class="col" data-col="doing"><h2>In Progress</h2><div class="cards" id="doing"></div></section>
+      <section class="col" data-col="done"><h2>Done</h2><div class="cards" id="done"></div></section>
+    </main>
+
+    <template id="card-tpl">
+      <article class="card">
+        <div class="card-title"></div>
+        <div class="crew"></div>
+        <div class="run">
+          <div class="log"></div>
+          <div class="pr"></div>
+          <form class="steer" hidden>
+            <input placeholder="Add context to steer the agent…" autocomplete="off" />
+            <button>Send</button>
+          </form>
+        </div>
+        <button class="move">Move to In Progress ▸</button>
+      </article>
+    </template>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
