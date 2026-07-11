@@ -102,10 +102,10 @@ function cardEl(t) {
 // ---------------- runs page ----------------
 function renderRuns() {
   const rows = runs.map((r) => `<tr><td><span class="k">${r.key}</span></td><td>${esc(r.title)}</td>
-    <td>${(r.tokens || 0).toLocaleString()}</td><td>$${(r.costUsd || 0).toFixed(4)}</td>
+    <td>${(r.tokens / 1000000).toFixed(6)} M</td><td>$${(r.costUsd || 0).toFixed(4)}</td>
     <td>${r.durationSec ? Math.round(r.durationSec) + "s" : "—"}</td><td>${new Date(r.ts).toLocaleString()}</td></tr>`).join("");
   $("#view-runs").innerHTML = `<div class="page"><h1>Runs</h1><div class="table-container">
-    <table class="runs"><thead><tr><th>Ticket</th><th>Title</th><th>Tokens</th><th>Est. cost</th><th>Duration</th><th>When</th></tr></thead>
+    <table class="runs"><thead><tr><th>Ticket</th><th>Title</th><th>Tokens (M)</th><th>Est. cost</th><th>Duration</th><th>When</th></tr></thead>
     <tbody>${rows || `<tr><td colspan="6" style="color:var(--faint); text-align: center; padding: 24px;">No runs yet.</td></tr>`}</tbody></table></div></div>`;
 }
 
@@ -123,15 +123,60 @@ function renderAnalytics() {
   const maxN = Math.max(1, ...days.map((d) => byDay[d].n));
   const bars = (val, max, alt) => days.map((d) => {
     const h = Math.round((val(d) / max) * 150);
-    return `<div class="bar-wrap"><span class="bar-val">${val(d) >= 1000 ? (val(d) / 1000).toFixed(1) + "k" : val(d)}</span><div class="bar ${alt ? "alt" : ""}" style="height:${h}px"></div><span class="bar-lbl">${d.slice(5)}</span></div>`;
+    const label = alt 
+      ? (val(d) >= 1000 ? (val(d) / 1000).toFixed(1) + "k" : val(d))
+      : (val(d) / 1000000).toFixed(4) + "M";
+    return `<div class="bar-wrap"><span class="bar-val">${label}</span><div class="bar ${alt ? "alt" : ""}" style="height:${h}px"></div><span class="bar-lbl">${d.slice(5)}</span></div>`;
   }).join("") || `<div style="color:var(--faint)">No data yet.</div>`;
+
+  const alerts = [];
+  const runsPerTicket = {};
+  
+  // 1. Single run threshold check (0.1M tokens)
+  runs.forEach((r) => {
+    runsPerTicket[r.key] = (runsPerTicket[r.key] || 0) + 1;
+    if (r.tokens > 100000) {
+      alerts.push(`High Burn Run: Run for ticket <strong>${r.key}</strong> consumed <strong>${(r.tokens / 1000000).toFixed(4)}M</strong> tokens in a single execution.`);
+    }
+  });
+
+  // 2. High Daily Burn Check (0.3M tokens)
+  days.forEach((d) => {
+    if (byDay[d].tok > 300000) {
+      alerts.push(`Daily Burn Spike: On <strong>${d}</strong>, total token usage spiked to <strong>${(byDay[d].tok / 1000000).toFixed(4)}M</strong> tokens.`);
+    }
+  });
+
+  // 3. Inefficient Burn Pattern (Loop/Exploration Overhead)
+  Object.keys(runsPerTicket).forEach((key) => {
+    if (runsPerTicket[key] >= 3) {
+      alerts.push(`Inefficient Pattern: Ticket <strong>${key}</strong> required <strong>${runsPerTicket[key]}</strong> runs, indicating high-iteration loop/exploration overhead.`);
+    }
+  });
+
+  const alertsHtml = alerts.length > 0 
+    ? `<div class="alerts-panel" style="background-color: var(--panel); border: 1px solid #ef4444; border-radius: var(--radius-lg); padding: 16px; margin-bottom: 24px; box-shadow: var(--shadow-lg);">
+        <h3 style="color: #ef4444; margin: 0 0 10px 0; font-size: 15px; display: flex; align-items: center; gap: 8px; font-weight: 700;">
+          ⚠️ Anomaly & Inefficiency Alerts
+        </h3>
+        <ul style="margin: 0; padding-left: 20px; color: var(--text); font-size: 13px; line-height: 1.6;">
+          ${alerts.map(a => `<li style="margin-bottom: 6px;">${a}</li>`).join("")}
+        </ul>
+       </div>`
+    : `<div class="alerts-panel" style="background-color: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 24px; box-shadow: var(--shadow-lg);">
+        <h3 style="color: #10b981; margin: 0 0 6px 0; font-size: 15px; display: flex; align-items: center; gap: 8px; font-weight: 700;">
+          ✓ Token Burn Alerts
+        </h3>
+        <div style="color: var(--muted); font-size: 13px;">No token burn anomalies or loops detected. Token metrics are within optimal operational parameters.</div>
+       </div>`;
 
   $("#view-analytics").innerHTML = `<div class="page">
     <h1>Analytics</h1>
+    ${alertsHtml}
     <div class="kpis">
       <div class="kpi"><div class="v">${tickets.length}</div><div class="l">Total tickets</div></div>
       <div class="kpi"><div class="v">${prs}</div><div class="l">PRs raised</div></div>
-      <div class="kpi"><div class="v">${(tokens / 1000).toFixed(1)}k</div><div class="l">Tokens burned</div></div>
+      <div class="kpi"><div class="v">${(tokens / 1000000).toFixed(4)}M</div><div class="l">Tokens burned</div></div>
       <div class="kpi"><div class="v">$${cost.toFixed(2)}</div><div class="l">Est. spend</div></div>
     </div>
     <div class="charts">
