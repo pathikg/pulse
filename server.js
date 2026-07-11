@@ -17,6 +17,10 @@ const app = express();
 app.use(express.json());
 app.use(express.static(join(__dirname, "public")));
 
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
+});
+
 // Remember the most recent run so "add context" can reattach to its sandbox.
 let lastRun = { interactionId: null, environmentId: null };
 
