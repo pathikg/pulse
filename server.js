@@ -64,7 +64,6 @@ function finishRun(ticket, buffer, done) {
     const testUrl = `http://localhost:${PORT}/?ticket=${ticket.id}`; // local preview stub
     db.updateTicket(ticket.id, { prUrl: url, prNumber: num, testUrl, status: "review" });
     db.addComment(ticket.id, { author: "system", kind: "note", text: `✅ PR opened: ${url}` });
-    db.addComment(ticket.id, { author: "system", kind: "note", text: `🧪 Test environment (local): ${testUrl}` });
   } else if (qMatch) {
     db.addComment(ticket.id, { author: "agent", kind: "question", text: qMatch[1].trim() });
     db.updateTicket(ticket.id, { status: "waiting" });
