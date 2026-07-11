@@ -8,12 +8,18 @@ const COLS = [{ id: "todo", label: "To Do" }, { id: "doing", label: "In Progress
 const AV = ["#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899"];
 const initials = (n) => (n || "?").split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
-let tickets = [], runs = [], view = "board", openId = null, es = null, createAtts = [];
+let tickets = [], runs = [], wiki = null, view = "board", openId = null, es = null, streamingId = null, createAtts = [];
 const logs = new Map();
 const T = (id) => tickets.find((t) => t.id === id);
 
 async function loadAll() {
-  [tickets, runs] = await Promise.all([api("/api/tickets"), api("/api/runs")]);
+  [tickets, runs, wiki] = await Promise.all([api("/api/tickets"), api("/api/runs"), api("/api/wiki")]);
+  // if we're not the ones live-streaming this ticket (e.g. after a mid-run reload),
+  // trust the server's incrementally-persisted activity so the log keeps advancing.
+  if (openId && streamingId !== openId) {
+    const t = T(openId);
+    if (t?.activity?.length) logs.set(openId, t.activity.map((a) => ({ ...a })));
+  }
   render();
 }
 
@@ -23,10 +29,11 @@ function render() {
     b.classList.toggle("active", active);
     b.setAttribute("aria-selected", active ? "true" : "false");
   });
-  ["board", "runs", "analytics"].forEach((v) => ($(`#view-${v}`).hidden = v !== view));
+  ["board", "runs", "analytics", "graph"].forEach((v) => ($(`#view-${v}`).hidden = v !== view));
   if (view === "board") renderBoard();
   if (view === "runs") renderRuns();
   if (view === "analytics") renderAnalytics();
+  if (view === "graph") renderGraph();
   if (openId) renderIssue();
 }
 
@@ -130,6 +137,31 @@ function renderAnalytics() {
   </div>`;
 }
 
+// ---------------- codebase graph / wiki ----------------
+async function reindex() {
+  const btn = $("#reindex-btn"); if (btn) { btn.textContent = "⏳ indexing… (Gemini 3.5 Flash)"; btn.disabled = true; }
+  try { await api("/api/reindex", { method: "POST" }); await loadAll(); }
+  catch (e) { if (btn) { btn.textContent = "↻ Reindex (failed, retry)"; btn.disabled = false; } }
+}
+function renderGraph() {
+  const mods = (wiki?.modules) || [];
+  const W = 780, H = 440, cx = W / 2, cy = H / 2, R = 165;
+  const pos = {};
+  mods.forEach((m, i) => { const a = -Math.PI / 2 + 2 * Math.PI * i / Math.max(1, mods.length); pos[m.file] = { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) }; });
+  const short = (f) => f.split("/").pop();
+  const edges = mods.flatMap((m) => (m.dependsOn || []).filter((d) => pos[d]).map((d) => ({ from: m.file, to: d })));
+  const lines = edges.map((e) => `<line x1="${pos[e.from].x.toFixed(1)}" y1="${pos[e.from].y.toFixed(1)}" x2="${pos[e.to].x.toFixed(1)}" y2="${pos[e.to].y.toFixed(1)}" stroke="var(--line2,#333)" stroke-width="1.5" marker-end="url(#arw)"/>`).join("");
+  const nodes = mods.map((m, i) => { const p = pos[m.file], c = AV[i % AV.length]; return `<g transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})"><circle r="30" fill="${c}22" stroke="${c}" stroke-width="2"/><text text-anchor="middle" dy="4" fill="var(--text)" font-size="10.5" font-weight="600">${short(m.file)}</text></g>`; }).join("");
+  const cards = mods.map((m, i) => `<div class="wiki-card"><div class="wc-h"><span class="dot" style="background:${AV[i % AV.length]}"></span>${esc(m.file)}</div><div class="wc-role">${esc(m.role || "")}</div><div class="wc-sum">${esc(m.summary || "")}</div>${(m.dependsOn || []).length ? `<div class="wc-deps">→ ${m.dependsOn.map(esc).join(", ")}</div>` : ""}</div>`).join("");
+  $("#view-graph").innerHTML = `<div class="page">
+    <div class="graph-head"><h1>Codebase Wiki</h1><button id="reindex-btn" class="primary">↻ Reindex</button></div>
+    <div class="muted-line">${wiki?.generatedAt ? `Indexed ${new Date(wiki.generatedAt).toLocaleString()} · ${mods.length} modules · ${esc(wiki.model || "Gemini 3.5 Flash")} · fed to Antigravity to cut exploration tokens` : "Not indexed yet — click Reindex to build the map with Gemini 3.5 Flash."}</div>
+    ${mods.length ? `<div class="graph-wrap"><svg viewBox="0 0 ${W} ${H}" class="depgraph"><defs><marker id="arw" markerWidth="9" markerHeight="9" refX="34" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="var(--faint,#888)"/></marker></defs>${lines}${nodes}</svg></div>
+    <div class="wiki-cards">${cards}</div>` : ""}
+  </div>`;
+  if ($("#reindex-btn")) $("#reindex-btn").onclick = reindex;
+}
+
 // ---------------- issue modal ----------------
 function openIssue(id) {
   openId = id;
@@ -150,6 +182,10 @@ function closeIssue() {
 
 function renderIssue() {
   const t = T(openId); if (!t) return;
+  // preserve in-progress input + scroll across background re-renders (poll/SSE resync)
+  const rin = $("#reply input");
+  const keep = rin ? { val: rin.value, foc: document.activeElement === rin, s: rin.selectionStart, e: rin.selectionEnd } : null;
+  const mainScroll = $(".iss-main")?.scrollTop;
   const agents = (t.crew || []).length ? (t.crew || []).map((s, i) => `<div class="agent-row"><span class="avatar" style="background:${AV[i % AV.length]}">${initials(s.name)}</span><div><div class="nm">${esc(s.name)}</div><div class="rl">${esc(s.role || "")}</div></div><span class="tag">${i === 0 ? "lead" : "member"}</span></div>`).join("") : `<div style="color:var(--faint);font-size:13.5px;font-style:italic">No crew yet — start work to spawn the crew.</div>`;
   const atts = (t.attachments || []).map((a, i) => `<img src="${a.dataUrl}" title="${esc(a.name)}" alt="${esc(a.name)}" onclick="window.open('${a.dataUrl}')" />`).join("");
   const comments = (t.comments || []).filter((c) => !c.text || !c.text.includes("Test environment")).map((c) => `<div class="comment ${c.author} ${c.kind === "question" ? "question" : ""}"><div class="c-who">${c.author === "agent" ? "🤖 Antigravity" : c.author === "user" ? "🧑 Pathik" : "•"}${c.kind === "question" ? " · asks" : ""}</div><div>${linkify(esc(c.text))}</div></div>`).join("") || `<div style="color:var(--faint);font-size:13.5px;font-style:italic">No comments yet.</div>`;
@@ -194,6 +230,9 @@ function renderIssue() {
   if ($("#preview-btn")) $("#preview-btn").onclick = () => spinPreview(t.id);
   if ($("#close-pr")) $("#close-pr").onclick = () => closePR(t.id);
   if ($("#reply")) $("#reply").onsubmit = (e) => { e.preventDefault(); const i = $("#reply input"); if (i.value.trim()) { reply(t.id, i.value.trim()); i.value = ""; } };
+  // restore what the poll would otherwise have wiped
+  if (keep) { const ni = $("#reply input"); if (ni) { ni.value = keep.val; if (keep.foc) { ni.focus(); try { ni.setSelectionRange(keep.s, keep.e); } catch {} } } }
+  if (mainScroll != null) { const m = $(".iss-main"); if (m) m.scrollTop = mainScroll; }
   renderLog(openId);
 }
 
@@ -233,15 +272,16 @@ async function spinPreview(id) {
 function stream(url, id) {
   if (es) es.close();
   es = new EventSource(url);
+  streamingId = id;
   es.onmessage = async (ev) => {
     const e = JSON.parse(ev.data);
-    if (e.kind === "end") { es.close(); return; }
+    if (e.kind === "end") { es.close(); streamingId = null; return; }
     if (e.kind === "ticket") { await loadAll(); return; }
-    if (e.kind === "error") { es.close(); pushLog(id, "error", e.text); return; }
+    if (e.kind === "error") { es.close(); streamingId = null; pushLog(id, "error", e.text); return; }
     if (e.kind === "done") return;
     if (e.text) pushLog(id, e.kind, e.text);
   };
-  es.onerror = () => { es.close(); loadAll(); }; // dropped stream → resync from server truth
+  es.onerror = () => { es.close(); streamingId = null; loadAll(); }; // dropped stream → resync from server truth
 }
 
 // ---------------- create + attachments ----------------
