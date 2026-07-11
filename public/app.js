@@ -296,11 +296,15 @@ if (qp && T(qp)) openIssue(qp);
 // --- Theme State Coordinator ---
 const themeBtn = $("#theme-toggle");
 const themeIcon = $(".theme-icon", themeBtn);
+const themeText = $(".theme-text", themeBtn);
 
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   if (themeIcon) {
     themeIcon.textContent = theme === "light" ? "☀️" : "🌙";
+  }
+  if (themeText) {
+    themeText.textContent = theme === "light" ? "Light Mode" : "Dark Mode";
   }
 }
 
