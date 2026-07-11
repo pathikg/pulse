@@ -95,7 +95,20 @@ app.post("/api/tickets/:id/attach", (req, res) => {
   res.json({ ok: true });
 });
 app.delete("/api/tickets/:id", (req, res) => { db.removeTicket(req.params.id); res.json({ ok: true }); });
-app.get("/api/runs", (_q, res) => res.json(db.listRuns()));
+app.get("/api/runs", (req, res) => {
+  let runs = db.listRuns();
+  const scale = req.query.scale;
+  if (scale === "M" || scale === "millions") {
+    return res.json(runs.map(r => ({
+      ...r,
+      tokens: (r.tokens || 0) / 1000000,
+      inputTokens: (r.inputTokens || 0) / 1000000,
+      outputTokens: (r.outputTokens || 0) / 1000000,
+      unit: "M"
+    })));
+  }
+  res.json(runs);
+});
 
 // --- codebase wiki (Gemini 3.5 Flash index; fed to the agent to cut exploration tokens) ---
 app.get("/api/wiki", (_q, res) => res.json(readWiki() || { modules: [] }));
