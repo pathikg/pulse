@@ -193,7 +193,7 @@ function renderGraph() {
   let scale = 1, panx = 0, pany = 0, panning = false, sx = 0, sy = 0, drag = null;
   const applyT = () => zoomG.setAttribute("transform", `translate(${panx},${pany}) scale(${scale})`);
   const toLocal = (e) => { const r = svg.getBoundingClientRect(); return { x: ((e.clientX - r.left) / r.width * W - panx) / scale, y: ((e.clientY - r.top) / r.height * H - pany) / scale }; };
-  svg.onwheel = (e) => { e.preventDefault(); scale = Math.max(0.3, Math.min(3, scale * (e.deltaY < 0 ? 1.1 : 0.9))); applyT(); };
+  svg.addEventListener("wheel", (e) => { e.preventDefault(); scale = Math.max(0.3, Math.min(3, scale * (e.deltaY < 0 ? 1.1 : 0.9))); applyT(); }, { passive: false });
   svg.onmousedown = (e) => { if (e.target.closest(".gn")) return; panning = true; sx = e.clientX - panx; sy = e.clientY - pany; };
   gN.onmousedown = (e) => { const g = e.target.closest(".gn"); if (!g) return; e.stopPropagation(); drag = +g.dataset.i; N[drag].fixed = true; temp = Math.max(temp, W / 14); };
   const onMove = (e) => { if (panning) { panx = e.clientX - sx; pany = e.clientY - sy; applyT(); } if (drag != null) { const p = toLocal(e); N[drag].x = p.x; N[drag].y = p.y; } };
