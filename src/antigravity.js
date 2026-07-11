@@ -32,9 +32,10 @@ every step, so context bloat is quadratic. Be surgical:
   the terminal — that floods context with tens of thousands of tokens that get re-sent every turn.
   Use \`git diff --stat\` if you must inspect changes.
 - Do not cat or print large files (e.g. style.css) in full. Open targeted line ranges only if needed.
-- Run \`npm ci\` and \`npm test\` AT MOST ONCE, right before opening the PR. Do not re-run them to
-  "double-check". If a test fails, read only the failing output and fix it — don't re-run the whole
-  suite repeatedly.
+- The sandbox is a FRESH git clone — \`node_modules\` is NOT present. Run \`npm ci\` ONCE as the very
+  first thing you do, before running or testing ANY code. Never run \`npm test\` before \`npm ci\` —
+  it will fail with "Cannot find package '@google/genai'". After that one install, run \`npm test\`
+  once right before opening the PR. Do not re-run either to "double-check".
 - Make edits decisively; avoid trial-and-error loops.
 
 ${QUESTION_RULE}
@@ -42,8 +43,7 @@ ${QUESTION_RULE}
 When the change is complete, ship it as a pull request:
 1. cd /workspace/pulse && git config user.email "agent@pulse.dev" && git config user.name "Pulse Agent"
 2. Create a branch named ${ticket.key.toLowerCase()}-<short-slug>
-2b. Verify the build, echoing progress so it's visible:
-      echo "▶ installing dependencies…" && npm ci
+2b. Verify the build (deps are already installed from your one npm ci at the start), echoing progress:
       echo "▶ running tests…" && npm test
       echo "✓ tests passed"
     The suite MUST pass before you open the PR — fix anything you broke.
