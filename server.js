@@ -55,10 +55,18 @@ function finishRun(ticket, buffer, done) {
   db.updateTicket(ticket.id, { interactionId: done.interactionId || ticket.interactionId, environmentId: done.environmentId || ticket.environmentId });
   const durationSec = done.created && done.updated ? (new Date(done.updated) - new Date(done.created)) / 1000 : null;
   const costUsd = cost(done.usage);
+  const totalTokens = done.usage?.total_tokens || 0;
+  const inputTokens = done.usage?.total_input_tokens || 0;
+  const outputTokens = done.usage?.total_output_tokens || 0;
   db.addRun({
     ticketId: ticket.id, key: ticket.key, title: ticket.title,
-    tokens: done.usage?.total_tokens || 0, inputTokens: done.usage?.total_input_tokens || 0,
-    outputTokens: done.usage?.total_output_tokens || 0, costUsd, durationSec,
+    tokens: totalTokens, 
+    inputTokens: inputTokens,
+    outputTokens: outputTokens, 
+    tokensM: totalTokens / 1000000,
+    inputTokensM: inputTokens / 1000000,
+    outputTokensM: outputTokens / 1000000,
+    costUsd, durationSec,
     ts: done.updated || new Date().toISOString(),
   });
 
