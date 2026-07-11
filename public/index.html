@@ -9,34 +9,41 @@
   <body>
     <header class="topbar">
       <div class="brand">Pulse<span class="dot">●</span></div>
-      <div class="tag">file a ticket · a crew assembles itself · a PR shows up</div>
-      <form id="new" class="new">
-        <input id="ticket" placeholder="Describe a ticket… e.g. Add a /health endpoint" autocomplete="off" />
-        <button>Add ticket</button>
-      </form>
+      <nav class="nav" id="nav">
+        <button data-view="board" class="active">Board</button>
+        <button data-view="runs">Runs</button>
+        <button data-view="analytics">Analytics</button>
+      </nav>
+      <button id="create-btn" class="primary">+ Create</button>
     </header>
 
-    <main class="board">
-      <section class="col" data-col="todo"><h2>To Do</h2><div class="cards" id="todo"></div></section>
-      <section class="col" data-col="doing"><h2>In Progress</h2><div class="cards" id="doing"></div></section>
-      <section class="col" data-col="done"><h2>Done</h2><div class="cards" id="done"></div></section>
-    </main>
+    <div class="view" id="view-board"></div>
+    <div class="view" id="view-runs" hidden></div>
+    <div class="view" id="view-analytics" hidden></div>
 
-    <template id="card-tpl">
-      <article class="card">
-        <div class="card-title"></div>
-        <div class="crew"></div>
-        <div class="run">
-          <div class="log"></div>
-          <div class="pr"></div>
-          <form class="steer" hidden>
-            <input placeholder="Add context to steer the agent…" autocomplete="off" />
-            <button>Send</button>
-          </form>
-        </div>
-        <button class="move">Move to In Progress ▸</button>
-      </article>
-    </template>
+    <!-- issue modal -->
+    <div class="scrim" id="scrim" hidden></div>
+    <section class="issue" id="issue" hidden></section>
+
+    <!-- create modal -->
+    <div class="scrim" id="create-scrim" hidden></div>
+    <form class="modal create" id="create-modal" hidden>
+      <h3>Create issue</h3>
+      <label class="fld">Summary<input id="c-title" placeholder="e.g. Add a /health endpoint" autocomplete="off" required /></label>
+      <div class="row">
+        <label class="fld">Type<select id="c-type"><option value="feature">✨ Feature</option><option value="bug">🐞 Bug</option></select></label>
+        <label class="fld">Priority<select id="c-priority"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select></label>
+      </div>
+      <label class="fld">Description<textarea id="c-desc" rows="4" placeholder="Context, problem statement, acceptance criteria…"></textarea></label>
+      <div class="fld">Attachments
+        <div class="dropzone" id="c-drop">Paste a screenshot, or <label class="link">browse<input type="file" id="c-file" accept="image/*" multiple hidden /></label></div>
+        <div class="thumbs" id="c-thumbs"></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="c-cancel">Cancel</button>
+        <button type="submit" class="primary">Create</button>
+      </div>
+    </form>
 
     <script type="module" src="app.js"></script>
   </body>

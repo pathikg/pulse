@@ -1,73 +1,89 @@
-// Wraps the Antigravity managed agent: runs a specialist on the repo, streams normalized events,
-// opens a PR labelled `antigravity`, and supports follow-up steering in the same sandbox.
+// Wraps the Antigravity managed agent: runs a specialist in a per-ticket sandbox, streams
+// normalized events, asks QUESTION: when blocked, opens a documented PR (labelled `antigravity`),
+// and supports follow-up steering that reuses the same sandbox.
 
 const AGENT = "antigravity-preview-05-2026";
-
-// Read env lazily (server.js loads .env after these modules are imported).
 const repo = () => process.env.GITHUB_REPO || "pathikg/pulse";
 const pat = () => process.env.GITHUB_PAT;
 
-function specialistInstruction(specialist) {
+const QUESTION_RULE = `If you hit a decision that MATERIALLY changes the implementation and you are
+unsure, do NOT guess: output a single line starting with "QUESTION: " followed by one clear question,
+then STOP without making further changes. The user's answer will be sent back to you in this same sandbox.`;
+
+function specialistInstruction(specialist, ticket) {
   const REPO = repo();
   const name = specialist?.name || "Engineer";
   const role = specialist?.role || "software engineer";
-  return `You are "${name}" — ${role}. Work inside the cloned repo at /workspace/pulse.
-Keep your narration short and concrete. A GitHub token is in /workspace/.gh_token.
+  return `You are "${name}" — ${role}, working ticket ${ticket.key} in the repo cloned at /workspace/pulse.
+Keep narration short and concrete. A GitHub token is in /workspace/.gh_token.
 
-Implement the ticket, then ship it as a pull request:
+${QUESTION_RULE}
+
+When the change is complete, ship it as a pull request:
 1. cd /workspace/pulse && git config user.email "agent@pulse.dev" && git config user.name "Pulse Agent"
-2. Create a uniquely named branch (random suffix), e.g. pulse-<slug>-$RANDOM
-3. Make the code changes, then: git add -A && git commit -m "<concise message>"
+2. Create a branch named ${ticket.key.toLowerCase()}-<short-slug>
+2b. Run \`npm ci && npm test\` and make sure the test suite PASSES before opening the PR. Fix anything you broke.
+3. Make the changes, then: git add -A && git commit -m "${ticket.key}: <concise message>"
 4. git remote set-url origin "https://x-access-token:$(cat /workspace/.gh_token)@github.com/${REPO}.git"
 5. git push -u origin <branch>
-6. Open a PR into main:
+6. Open a PR with a PROPER description. The body MUST include: a "## Summary" of what changed,
+   a "## Testing" section, and the line "Resolves ${ticket.key}". Use:
    curl -sS -X POST -H "Authorization: Bearer $(cat /workspace/.gh_token)" -H "Accept: application/vnd.github+json" \
-     https://api.github.com/repos/${REPO}/pulls -d '{"title":"<title>","head":"<branch>","base":"main","body":"Opened autonomously by Pulse."}'
-7. Add the antigravity label (capture the PR number from step 6's response):
-   curl -sS -X POST -H "Authorization: Bearer $(cat /workspace/.gh_token)" -H "Accept: application/vnd.github+json" \
+     https://api.github.com/repos/${REPO}/pulls \
+     -d "$(python3 -c 'import json,sys; print(json.dumps({"title":"${ticket.key}: <title>","head":"<branch>","base":"main","body":"## Summary\\n<what changed>\\n\\n## Testing\\n<how to test>\\n\\nResolves ${ticket.key}"}))')"
+7. Add the label: curl -sS -X POST -H "Authorization: Bearer $(cat /workspace/.gh_token)" -H "Accept: application/vnd.github+json" \
      https://api.github.com/repos/${REPO}/issues/<pr_number>/labels -d '{"labels":["antigravity"]}'
 8. Print the PR html_url on its own line, exactly: PR_URL: <url>`;
 }
 
-// Map raw Interactions API events → compact UI events.
+function continueInstruction(ticket) {
+  return `Continue working ticket ${ticket.key} in the SAME sandbox at /workspace/pulse, on the SAME branch
+you already pushed. ${QUESTION_RULE}
+If the user says tests/CI are failing: run \`npm ci && npm test\`, read the failures, fix them, then
+\`git add -A && git commit\` and \`git push\` to the SAME branch to UPDATE the existing PR — do NOT open a new PR.
+When done, print PR_URL: <url> for the existing PR.`;
+}
+
 export function normalize(ev) {
   const d = ev.delta;
   switch (ev.event_type) {
-    case "interaction.created":
-      return { kind: "status", text: "sandbox starting…" };
-    case "step.start":
-      if (ev.step?.type === "thought") return { kind: "thought", text: "" };
-      return null;
+    case "interaction.created": return { kind: "status", text: "sandbox starting…" };
+    case "step.start": return ev.step?.type === "thought" ? { kind: "thought", text: "" } : null;
     case "step.delta":
       if (d?.type === "thought_summary") return { kind: "thought", text: d.content?.text || "" };
       if (d?.type === "code_execution_call") return { kind: "command", text: d.arguments?.code || "" };
-      if (d?.type === "code_execution_result")
-        return { kind: "output", text: String(d.result || ""), isError: !!d.is_error };
+      if (d?.type === "code_execution_result") return { kind: "output", text: String(d.result || ""), isError: !!d.is_error };
       if (d?.type === "text") return { kind: "message", text: d.text || "" };
       return null;
     case "interaction.completed":
-      return { kind: "done", environmentId: ev.interaction?.environment_id, interactionId: ev.interaction?.id };
-    default:
-      return null;
+      return {
+        kind: "done",
+        environmentId: ev.interaction?.environment_id,
+        interactionId: ev.interaction?.id,
+        usage: ev.interaction?.usage || null,
+        created: ev.interaction?.created,
+        updated: ev.interaction?.updated,
+      };
+    default: return null;
   }
 }
 
 async function pump(stream, onEvent) {
-  let ids = {};
+  let done = {};
   for await (const ev of stream) {
     const n = normalize(ev);
     if (!n) continue;
-    if (n.kind === "done") ids = { environmentId: n.environmentId, interactionId: n.interactionId };
+    if (n.kind === "done") done = n;
     onEvent(n);
   }
-  return ids;
+  return done;
 }
 
 export async function runSpecialist(ai, { ticket, specialist, onEvent }) {
   const stream = await ai.interactions.create({
     agent: AGENT,
-    input: ticket,
-    system_instruction: specialistInstruction(specialist),
+    input: ticket.title,
+    system_instruction: specialistInstruction(specialist, ticket),
     environment: {
       type: "remote",
       sources: [
@@ -80,13 +96,14 @@ export async function runSpecialist(ai, { ticket, specialist, onEvent }) {
   return pump(stream, onEvent);
 }
 
-// Steer mid-task: a new interaction chained to the previous one, reusing the same sandbox.
-export async function followUp(ai, { previousInteractionId, environmentId, input, onEvent }) {
+// Steer / answer a question: chained to the previous interaction, reusing the same sandbox.
+export async function followUp(ai, { ticket, previousInteractionId, environmentId, input, onEvent }) {
   const stream = await ai.interactions.create({
     agent: AGENT,
     input,
+    system_instruction: continueInstruction(ticket),
     previous_interaction_id: previousInteractionId,
-    environment: environmentId, // reattach to the same sandbox (filesystem preserved)
+    environment: environmentId,
     stream: true,
   });
   return pump(stream, onEvent);
