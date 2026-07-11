@@ -8,7 +8,6 @@
     <script>
       (function() {
         const saved = localStorage.getItem("pulse-theme");
-        const preferDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         const theme = saved || "light";
         document.documentElement.setAttribute("data-theme", theme);
       })();
