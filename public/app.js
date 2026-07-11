@@ -2,6 +2,50 @@ const $ = (s, r = document) => r.querySelector(s);
 const cols = { todo: $("#todo"), doing: $("#doing"), done: $("#done") };
 const PR_RE = /https:\/\/github\.com\/[^\s"'`)]+\/pull\/\d+/;
 
+// --- check authentication status ---
+async function checkAuth() {
+  try {
+    const res = await fetch("/auth/user");
+    if (res.ok) {
+      const user = await res.json();
+      $("#user-info").innerHTML = `
+        <img class="avatar" src="${user.avatar_url || 'https://github.com/identicons/pulse.png'}" alt="${user.login}" />
+        <strong>${user.name || user.login}</strong>
+      `;
+      $("#auth-btn").textContent = "Logout";
+      $("#auth-btn").href = "/auth/logout";
+      
+      // Hide auth overlay and show the board
+      $("#auth-overlay").style.display = "none";
+      $("#board-container").style.filter = "none";
+      $("#board-container").style.pointerEvents = "all";
+      $("#new").hidden = false;
+    } else {
+      const data = await res.json().catch(() => ({}));
+      showLoginScreen(data.isMock);
+    }
+  } catch (e) {
+    showLoginScreen(true);
+  }
+}
+
+function showLoginScreen(isMock) {
+  $("#user-info").textContent = "Not logged in";
+  $("#auth-btn").textContent = "Login with GitHub";
+  $("#auth-btn").href = "/auth/github";
+  $("#auth-overlay").style.display = "flex";
+  $("#board-container").style.filter = "blur(8px)";
+  $("#board-container").style.pointerEvents = "none";
+  $("#new").hidden = true;
+  
+  if (isMock) {
+    $("#mock-notice").style.display = "block";
+  }
+}
+
+// Check auth on load
+checkAuth();
+
 // --- add ticket ---
 $("#new").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -34,10 +78,16 @@ async function start(node) {
   line(log, "status", "planning the crew…");
   let crew;
   try {
-    crew = await (await fetch("/api/plan", {
+    const res = await fetch("/api/plan", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ticket: node._title }),
-    })).json();
+    });
+    if (res.status === 401) {
+      line(log, "error", "Your session has expired. Please login again.");
+      showLoginScreen();
+      return;
+    }
+    crew = await res.json();
   } catch (e) { return line(log, "error", "planner failed: " + e); }
 
   renderCrew(node, crew.specialists || []);

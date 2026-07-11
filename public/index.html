@@ -10,13 +10,32 @@
     <header class="topbar">
       <div class="brand">Pulse<span class="dot">●</span></div>
       <div class="tag">file a ticket · a crew assembles itself · a PR shows up</div>
-      <form id="new" class="new">
+      
+      <!-- User Profile and Login/Logout controls -->
+      <div id="user-controls" class="user-controls">
+        <span id="user-info" class="user-info">Loading user...</span>
+        <a id="auth-btn" href="/auth/github" class="btn">Login with GitHub</a>
+      </div>
+
+      <form id="new" class="new" hidden>
         <input id="ticket" placeholder="Describe a ticket… e.g. Add a /health endpoint" autocomplete="off" />
         <button>Add ticket</button>
       </form>
     </header>
 
-    <main class="board">
+    <!-- Overlay for users not logged in -->
+    <div id="auth-overlay" class="auth-overlay">
+      <div class="auth-modal">
+        <h2>Welcome to Pulse</h2>
+        <p>An autonomous engineering platform that builds itself. Please authenticate to start managing tickets and assembling AI crews.</p>
+        <a href="/auth/github" class="btn primary-btn">Login with GitHub</a>
+        <div id="mock-notice" class="mock-notice" style="display: none;">
+          <small>Running in developer mode. Clicking the button will log you in with a mock profile instantly.</small>
+        </div>
+      </div>
+    </div>
+
+    <main class="board" id="board-container" style="filter: blur(8px); pointer-events: none;">
       <section class="col" data-col="todo"><h2>To Do</h2><div class="cards" id="todo"></div></section>
       <section class="col" data-col="doing"><h2>In Progress</h2><div class="cards" id="doing"></div></section>
       <section class="col" data-col="done"><h2>Done</h2><div class="cards" id="done"></div></section>
