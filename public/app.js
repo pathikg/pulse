@@ -291,3 +291,34 @@ await loadAll();
 setInterval(() => { if (tickets.some((t) => t.status === "doing")) loadAll(); }, 8000);
 const qp = new URLSearchParams(location.search).get("ticket");
 if (qp && T(qp)) openIssue(qp);
+
+
+// --- Theme State Coordinator ---
+const themeBtn = $("#theme-toggle");
+const themeIcon = $(".theme-icon", themeBtn);
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  if (themeIcon) {
+    themeIcon.textContent = theme === "light" ? "☀️" : "🌙";
+  }
+}
+
+// Initial sync of toggle icon
+const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+applyTheme(currentTheme);
+
+if (themeBtn) {
+  themeBtn.onclick = () => {
+    const nextTheme = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+    localStorage.setItem("pulse-theme", nextTheme);
+    applyTheme(nextTheme);
+  };
+}
+
+// Listen to system preference changes
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+  if (!localStorage.getItem("pulse-theme")) {
+    applyTheme(e.matches ? "dark" : "light");
+  }
+});

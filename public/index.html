@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pulse — self-building agent board</title>
     <link rel="stylesheet" href="style.css" />
+    <script>
+      (function() {
+        const saved = localStorage.getItem("pulse-theme");
+        const preferDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = saved || (preferDark ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
   </head>
   <body>
     <header class="topbar">
@@ -14,6 +22,9 @@
         <button data-view="runs" role="tab" aria-selected="false" id="tab-runs" aria-controls="view-runs">Runs</button>
         <button data-view="analytics" role="tab" aria-selected="false" id="tab-analytics" aria-controls="view-analytics">Analytics</button>
       </nav>
+      <button id="theme-toggle" class="theme-btn" aria-label="Toggle theme" title="Toggle theme">
+        <span class="theme-icon">🌙</span>
+      </button>
       <button id="create-btn" class="primary">+ Create</button>
     </header>
 
