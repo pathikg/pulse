@@ -8,7 +8,7 @@ const COLS = [{ id: "todo", label: "To Do" }, { id: "doing", label: "In Progress
 const AV = ["#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899"];
 const initials = (n) => (n || "?").split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
-let tickets = [], runs = [], wiki = null, view = "board", openId = null, es = null, streamingId = null, createAtts = [];
+let tickets = [], runs = [], wiki = null, view = "board", openId = null, es = null, streamingId = null, createAtts = [], issueSig = null;
 const logs = new Map();
 const T = (id) => tickets.find((t) => t.id === id);
 
@@ -206,6 +206,7 @@ function renderGraph() {
 // ---------------- issue modal ----------------
 function openIssue(id) {
   openId = id;
+  issueSig = null; // force a full build when (re)opening
   if (!logs.has(id)) { const t = T(id); if (t?.activity?.length) logs.set(id, t.activity.map((a) => ({ ...a }))); } // show persisted log
   $("#scrim").hidden = false; $("#issue").hidden = false; renderIssue();
   $("#iss-close").focus();
@@ -223,6 +224,11 @@ function closeIssue() {
 
 function renderIssue() {
   const t = T(openId); if (!t) return;
+  // Only rebuild the modal DOM when something STRUCTURAL changed (status, PR, crew, comments,
+  // attachments). Otherwise just refresh the live log — this kills the every-8s "reload" flicker.
+  const sig = [openId, t.status, t.prNumber, (t.crew || []).length, (t.comments || []).length, (t.attachments || []).length, t.testUrl].join("|");
+  if (sig === issueSig && $("#issue .iss-cols")) { renderLog(openId); return; }
+  issueSig = sig;
   // preserve in-progress input + scroll across background re-renders (poll/SSE resync)
   const rin = $("#reply input");
   const keep = rin ? { val: rin.value, foc: document.activeElement === rin, s: rin.selectionStart, e: rin.selectionEnd } : null;

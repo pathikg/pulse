@@ -24,10 +24,14 @@ ${map}
 Embody ALL of these specialists as you work — apply each one's perspective (${lead.name} leads).
 Keep narration short and concrete. A GitHub token is in /workspace/.gh_token.
 
-COST DISCIPLINE — you are billed per token and the whole transcript is re-sent to the model on
-every step, so context bloat is quadratic. Be surgical:
-- Explore minimally. Read only the specific files/sections you need, ONCE. Do not repeatedly grep
-  or sed the same file, and do not re-list directories you have already seen.
+STRICT WORK BUDGET — you are billed per token and the whole transcript is re-sent to the model on
+every step, so exploration is the #1 cost/latency killer. Treat this as a HARD limit:
+- You get ~8 tool calls TOTAL for the whole ticket. Plan to: (1) npm ci, (2) open the 1-2 files named
+  in the REPO MAP that this ticket touches, (3) edit them, (4) npm test once, (5) commit/push/PR.
+- TRUST THE REPO MAP above. Do NOT explore the tree to "understand the codebase" — the map already
+  tells you what each file is. Go straight to the file the ticket concerns.
+- Read only the specific files/sections you need, ONCE. Do not repeatedly grep or sed the same file,
+  do not re-list directories, and do not read files unrelated to this ticket.
 - NEVER run \`git log -p\`, \`git show <sha>\`, or otherwise dump commit patches / large diffs into
   the terminal — that floods context with tens of thousands of tokens that get re-sent every turn.
   Use \`git diff --stat\` if you must inspect changes.
