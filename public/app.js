@@ -108,7 +108,7 @@ function renderAnalytics() {
     </div>
     <div class="chart" style="margin-top:16px"><h3>Tickets by status</h3>
       <div class="bars">${COLS.map((c) => { const n = tickets.filter((t) => t.status === c.id).length; const h = Math.round((n / Math.max(1, tickets.length)) * 130); return `<div class="bar-wrap"><span class="bar-val">${n}</span><div class="bar" style="height:${h}px"></div><span class="bar-lbl">${c.label}</span></div>`; }).join("")}
-      <div class="bar-wrap"><span class="bar-val">${done}</span><div class="bar alt" style="height:${Math.round((done / Math.max(1, tickets.length)) * 130)}px"></div><span class="bar-lbl">Closed</span></div></div></div>
+      <div class="bar-wrap"><span class="bar-val">${done}</span><div class="bar alt" style="height:${Math.round((done / Math.max(1, tickets.length)) * 130)}px\"></div><span class="bar-lbl">Closed</span></div></div></div>
   </div>`;
 }
 
@@ -120,7 +120,7 @@ function renderIssue() {
   const t = T(openId); if (!t) return;
   const agents = (t.crew || []).length ? (t.crew || []).map((s, i) => `<div class="agent-row"><span class="avatar" style="background:${AV[i % AV.length]}">${initials(s.name)}</span><div><div class="nm">${esc(s.name)}</div><div class="rl">${esc(s.role || "")}</div></div><span class="tag">${i === 0 ? "lead" : "member"}</span></div>`).join("") : `<div style="color:var(--faint);font-size:13px">No crew yet — start work to spawn the crew.</div>`;
   const atts = (t.attachments || []).map((a, i) => `<img src="${a.dataUrl}" title="${esc(a.name)}" onclick="window.open('${a.dataUrl}')" />`).join("");
-  const comments = (t.comments || []).map((c) => `<div class="comment ${c.author} ${c.kind === "question" ? "question" : ""}"><div class="c-who">${c.author === "agent" ? "🤖 Antigravity" : c.author === "user" ? "🧑 Pathik" : "•"}${c.kind === "question" ? " · asks" : ""}</div><div>${linkify(esc(c.text))}</div></div>`).join("") || `<div style="color:var(--faint);font-size:13px">No comments yet.</div>`;
+  const comments = (t.comments || []).filter((c) => !c.text || !c.text.includes("Test environment")).map((c) => `<div class="comment ${c.author} ${c.kind === "question" ? "question" : ""}"><div class="c-who">${c.author === "agent" ? "🤖 Antigravity" : c.author === "user" ? "🧑 Pathik" : "•"}${c.kind === "question" ? " · asks" : ""}</div><div>${linkify(esc(c.text))}</div></div>`).join("") || `<div style="color:var(--faint);font-size:13px">No comments yet.</div>`;
   const canReply = ["waiting", "review", "doing"].includes(t.status);
   const isPreview = t.testUrl && /localhost:31\d\d/.test(t.testUrl);
   const prBlock = t.prUrl ? `<div class="pr-actions">
@@ -148,8 +148,8 @@ function renderIssue() {
       <div class="iss-rail">
         ${t.status === "todo" ? `<button class="startwork" id="startwork">▶ Start work</button><div style="height:16px"></div>` : ""}
         ${prBlock ? `<div class="rail-row"><div class="rl-l">Pull request</div>${prBlock}</div>` : ""}
-        <div class="rail-row"><div class="rl-l">Assignee</div><div class="rl-v"><div class="who"><span class="avatar" style="background:${AV[0]}">AG</span>Antigravity</div></div></div>
-        <div class="rail-row"><div class="rl-l">Reporter</div><div class="rl-v"><div class="who"><span class="avatar" style="background:${AV[3]}">PK</span>Pathik</div></div></div>
+        <div class="rail-row"><div class="rl-l">Assignee</div><div class="rl-v"><div class="who"><span class=\"avatar\" style=\"background:${AV[0]}\">AG</span>Antigravity</div></div></div>
+        <div class="rail-row"><div class="rl-l">Reporter</div><div class="rl-v"><div class="who"><span class=\"avatar\" style=\"background:${AV[3]}\">PK</span>Pathik</div></div></div>
         <div class="rail-row"><div class="rl-l">Priority</div><div class="rl-v"><span class="prio ${t.priority}"></span> ${t.priority}</div></div>
         <div class="rail-row"><div class="rl-l">Type</div><div class="rl-v">${t.type === "bug" ? "🐞 Bug" : "✨ Feature"}</div></div>
         <div class="rail-row"><div class="rl-l">Labels</div><div class="rl-v">${t.prNumber ? '<span class="pill">antigravity</span>' : "—"}</div></div>
