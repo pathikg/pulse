@@ -4,16 +4,36 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pulse — self-building agent board</title>
+    <!-- inline script to prevent Flash of Unstyled Content (FOUC) -->
+    <script>
+      (function() {
+        var theme = localStorage.getItem('theme');
+        if (!theme) {
+          theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        }
+        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.classList.add('no-transitions');
+        window.addEventListener('DOMContentLoaded', function() {
+          setTimeout(function() {
+            document.documentElement.classList.remove('no-transitions');
+          }, 50);
+        });
+      })();
+    </script>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <header class="topbar">
+    <header class=\"topbar\">
       <div class="brand">Pulse<span class="dot">●</span></div>
       <nav class="nav" id="nav" role="tablist" aria-label="Views">
         <button data-view="board" class="active" role="tab" aria-selected="true" id="tab-board" aria-controls="view-board">Board</button>
         <button data-view="runs" role="tab" aria-selected="false" id="tab-runs" aria-controls="view-runs">Runs</button>
         <button data-view="analytics" role="tab" aria-selected="false" id="tab-analytics" aria-controls="view-analytics">Analytics</button>
       </nav>
+      <button id="theme-toggle" class="theme-btn" aria-label="Toggle visual theme">
+        <span class="theme-icon" id="theme-icon">☀</span>
+        <span id="theme-label">Light</span>
+      </button>
       <button id="create-btn" class="primary">+ Create</button>
     </header>
 

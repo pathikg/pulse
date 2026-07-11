@@ -12,6 +12,49 @@ let tickets = [], runs = [], view = "board", openId = null, es = null, createAtt
 const logs = new Map();
 const T = (id) => tickets.find((t) => t.id === id);
 
+// ---------------- theme switching state engine ----------------
+function initTheme() {
+  const toggleBtn = $("#theme-toggle");
+  if (!toggleBtn) return;
+
+  function updateToggleButton(theme) {
+    const icon = $("#theme-icon");
+    const label = $("#theme-label");
+    if (theme === "light") {
+      if (icon) icon.textContent = "🌙";
+      if (label) label.textContent = "Dark";
+      toggleBtn.setAttribute("aria-label", "Switch to dark mode");
+    } else {
+      if (icon) icon.textContent = "☀";
+      if (label) label.textContent = "Light";
+      toggleBtn.setAttribute("aria-label", "Switch to light mode");
+    }
+  }
+
+  function setTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+    updateToggleButton(theme);
+  }
+
+  // Get current theme from DOM attribute set by our FOUC script
+  let currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+  updateToggleButton(currentTheme);
+
+  toggleBtn.onclick = () => {
+    currentTheme = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+    setTheme(currentTheme);
+  };
+
+  // Sync with OS preference changes if user hasn't explicitly set a preference
+  window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", (e) => {
+    if (!localStorage.getItem("theme")) {
+      const systemTheme = e.matches ? "light" : "dark";
+      setTheme(systemTheme);
+    }
+  });
+}
+
 async function loadAll() {
   [tickets, runs] = await Promise.all([api("/api/tickets"), api("/api/runs")]);
   render();
@@ -21,7 +64,7 @@ function render() {
   $$("#nav button").forEach((b) => {
     const active = b.dataset.view === view;
     b.classList.toggle("active", active);
-    b.setAttribute("aria-selected", active ? "true" : "false");
+    b.setAttribute("aria-selected", active ? "true" : "false\");");
   });
   ["board", "runs", "analytics"].forEach((v) => ($(`#view-${v}`).hidden = v !== view));
   if (view === "board") renderBoard();
@@ -287,6 +330,7 @@ $("#scrim").onclick = closeIssue;
 
 // boot
 await loadAll();
+initTheme();
 // backstop: if a run is in-flight, poll so the card converges even if the SSE stream dropped
 setInterval(() => { if (tickets.some((t) => t.status === "doing")) loadAll(); }, 8000);
 const qp = new URLSearchParams(location.search).get("ticket");
