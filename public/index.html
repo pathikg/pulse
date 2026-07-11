@@ -9,34 +9,58 @@
   <body>
     <header class="topbar">
       <div class="brand">Pulse<span class="dot">●</span></div>
-      <nav class="nav" id="nav">
-        <button data-view="board" class="active">Board</button>
-        <button data-view="runs">Runs</button>
-        <button data-view="analytics">Analytics</button>
+      <nav class="nav" id="nav" role="tablist" aria-label="Views">
+        <button data-view="board" class="active" role="tab" aria-selected="true" id="tab-board" aria-controls="view-board">Board</button>
+        <button data-view="runs" role="tab" aria-selected="false" id="tab-runs" aria-controls="view-runs">Runs</button>
+        <button data-view="analytics" role="tab" aria-selected="false" id="tab-analytics" aria-controls="view-analytics">Analytics</button>
       </nav>
       <button id="create-btn" class="primary">+ Create</button>
     </header>
 
-    <div class="view" id="view-board"></div>
-    <div class="view" id="view-runs" hidden></div>
-    <div class="view" id="view-analytics" hidden></div>
+    <main class="views" id="main-content">
+      <div class="view" id="view-board" role="tabpanel" aria-labelledby="tab-board"></div>
+      <div class="view" id="view-runs" role="tabpanel" aria-labelledby="tab-runs" hidden></div>
+      <div class="view" id="view-analytics" role="tabpanel" aria-labelledby="tab-analytics" hidden></div>
+    </main>
 
     <!-- issue modal -->
     <div class="scrim" id="scrim" hidden></div>
-    <section class="issue" id="issue" hidden></section>
+    <section class="issue" id="issue" role="dialog" aria-modal="true" aria-labelledby="iss-title" hidden></section>
 
     <!-- create modal -->
     <div class="scrim" id="create-scrim" hidden></div>
-    <form class="modal create" id="create-modal" hidden>
-      <h3>Create issue</h3>
-      <label class="fld">Summary<input id="c-title" placeholder="e.g. Add a /health endpoint" autocomplete="off" required /></label>
+    <form class="modal create" id="create-modal" role="dialog" aria-modal="true" aria-labelledby="create-modal-title" hidden>
+      <h3 id="create-modal-title">Create issue</h3>
+      <label class="fld" for="c-title">Summary
+        <input id="c-title" placeholder="e.g. Add a /health endpoint" autocomplete="off" required />
+      </label>
       <div class="row">
-        <label class="fld">Type<select id="c-type"><option value="feature">✨ Feature</option><option value="bug">🐞 Bug</option></select></label>
-        <label class="fld">Priority<select id="c-priority"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select></label>
+        <label class="fld" for="c-type">Type
+          <select id="c-type">
+            <option value="feature">✨ Feature</option>
+            <option value="bug">🐞 Bug</option>
+          </select>
+        </label>
+        <label class="fld" for="c-priority">Priority
+          <select id="c-priority">
+            <option value="high">High</option>
+            <option value="medium" selected>Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </label>
       </div>
-      <label class="fld">Description<textarea id="c-desc" rows="4" placeholder="Context, problem statement, acceptance criteria…"></textarea></label>
-      <div class="fld">Attachments
-        <div class="dropzone" id="c-drop">Paste a screenshot, or <label class="link">browse<input type="file" id="c-file" accept="image/*" multiple hidden /></label></div>
+      <label class="fld" for="c-desc">Description
+        <textarea id="c-desc" rows="4" placeholder="Context, problem statement, acceptance criteria…"></textarea>
+      </label>
+      <div class="fld">
+        Attachments
+        <div class="dropzone" id="c-drop">
+          Paste a screenshot, or 
+          <label class="link" for="c-file">
+            browse
+            <input type="file" id="c-file" accept="image/*" multiple hidden />
+          </label>
+        </div>
         <div class="thumbs" id="c-thumbs"></div>
       </div>
       <div class="actions">
