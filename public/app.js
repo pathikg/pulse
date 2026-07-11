@@ -33,7 +33,14 @@ function render() {
   if (view === "board") renderBoard();
   if (view === "runs") renderRuns();
   if (view === "analytics") renderAnalytics();
-  if (view === "graph") renderGraph();
+  if (view === "graph") {
+    renderGraph();
+  } else {
+    if (graphAnim) { cancelAnimationFrame(graphAnim); graphAnim = null; }
+    if (activeOnMove) { window.removeEventListener("mousemove", activeOnMove); activeOnMove = null; }
+    if (activeOnUp) { window.removeEventListener("mouseup", activeOnUp); activeOnUp = null; }
+    if (graphResizeObserver) { graphResizeObserver.disconnect(); graphResizeObserver = null; }
+  }
   if (openId) renderIssue();
 }
 
@@ -144,7 +151,7 @@ async function reindex() {
   catch (e) { if (btn) { btn.textContent = "↻ Reindex (failed, retry)"; btn.disabled = false; } }
 }
 const GTYPES = { module: "#8b5cf6", endpoint: "#10b981", external: "#f59e0b", concept: "#3b82f6" };
-let graphSig = null, graphAnim = null;
+let graphSig = null, graphAnim = null, activeOnMove = null, activeOnUp = null, graphResizeObserver = null;
 function renderGraph() {
   const nodes0 = wiki?.nodes || [], edges0 = wiki?.edges || [];
   const sig = (wiki?.generatedAt || "") + "/" + nodes0.length;
@@ -152,6 +159,9 @@ function renderGraph() {
   if (sig === graphSig && $("#gsvg")) return;
   graphSig = sig;
   if (graphAnim) { cancelAnimationFrame(graphAnim); graphAnim = null; }
+  if (activeOnMove) { window.removeEventListener("mousemove", activeOnMove); activeOnMove = null; }
+  if (activeOnUp) { window.removeEventListener("mouseup", activeOnUp); activeOnUp = null; }
+  if (graphResizeObserver) { graphResizeObserver.disconnect(); graphResizeObserver = null; }
 
   $("#view-graph").innerHTML = `<div class="graph-page">
     <div class="graph-head"><h1>Codebase Wiki</h1>
@@ -164,12 +174,27 @@ function renderGraph() {
   if (!nodes0.length) return;
 
   const canvas = $("#gcanvas"), svg = $("#gsvg"), zoomG = $("#gzoom");
-  const W = canvas.clientWidth || 900, H = canvas.clientHeight || 520;
+  let W = canvas.clientWidth || 900, H = canvas.clientHeight || 520;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const idx = {};
   const N = nodes0.map((n, i) => { idx[n.id] = i; return { ...n, x: W / 2 + (Math.random() - .5) * W * .6, y: H / 2 + (Math.random() - .5) * H * .6, vx: 0, vy: 0 }; });
   const E = edges0.map((e) => ({ s: idx[e.source], t: idx[e.target] })).filter((e) => e.s != null && e.t != null);
-  const k = Math.sqrt((W * H) / Math.max(1, N.length)) * 0.72;
+  let k = Math.sqrt((W * H) / Math.max(1, N.length)) * 0.72;
+
+  const resizeObserver = new ResizeObserver((entries) => {
+    for (let entry of entries) {
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) {
+        W = width;
+        H = height;
+        svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+        k = Math.sqrt((W * H) / Math.max(1, N.length)) * 0.72;
+        temp = Math.max(temp, W / 14);
+      }
+    }
+  });
+  resizeObserver.observe(canvas);
+  graphResizeObserver = resizeObserver;
   let temp = W / 8;
 
   const gE = $("#gedges"), gN = $("#gnodes");
@@ -198,6 +223,8 @@ function renderGraph() {
   gN.onmousedown = (e) => { const g = e.target.closest(".gn"); if (!g) return; e.stopPropagation(); drag = +g.dataset.i; N[drag].fixed = true; temp = Math.max(temp, W / 14); };
   const onMove = (e) => { if (panning) { panx = e.clientX - sx; pany = e.clientY - sy; applyT(); } if (drag != null) { const p = toLocal(e); N[drag].x = p.x; N[drag].y = p.y; } };
   const onUp = () => { panning = false; if (drag != null) { N[drag].fixed = false; drag = null; } };
+  activeOnMove = onMove;
+  activeOnUp = onUp;
   window.addEventListener("mousemove", onMove);
   window.addEventListener("mouseup", onUp);
   step();
